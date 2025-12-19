@@ -28,8 +28,8 @@ tabela = respostas.groupby(['Nº Carro', 'hora']).size().unstack(fill_value=0) #
 #size retorna o numero de linhas, que no nosso caso eh quantas vezes o carro aparece
 #unstack para des-esculhambar o novo dataframe que sai do groupby
 
-horas = [f'{i:02d}h' for i in range(24)]
-tabela = tabela.reindex(columns=horas, fill_value=0)
+horas = [f'{i:02d}h' for i in range(24)] #cria string com colunas de hora
+tabela = tabela.reindex(columns=horas, fill_value=0)#reseta os indices de acordo com o string formatado de  horarios
 
 # traz o Nº Carro de volta como coluna visível
 tabela = tabela.reset_index()
