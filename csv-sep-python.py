@@ -23,24 +23,17 @@ def separate(files, type,indexes):
             df = pd.read_csv(file.path, sep=';')
 
         date_col=df.columns[indexes[0]] #transformando data de processamento
-        df[date_col] = pd.to_datetime(
-            df[date_col],
-            dayfirst=True
-        ).dt.date
+
+        df["Hora Transação"]=pd.to_datetime(df[date_col],dayfirst=True).dt.hour #salvando hora da transacao
+        df[date_col] = pd.to_datetime(df[date_col],dayfirst=True).dt.date #salvando dia de transacao
+
         outra_col=df.columns[indexes[1]] #transformando data de transacao
-        df[outra_col] = pd.to_datetime(
-            df[outra_col],
-            dayfirst=True
-        ).dt.date
+        df[outra_col] = pd.to_datetime(df[outra_col],dayfirst=True).dt.date
 
         if type=='BU':
             outra_col = "Data da Ordem" #desgraca de mudanca de padrao do BU
 
-            converted = pd.to_datetime(
-                df[outra_col],
-                dayfirst=False,
-                errors='coerce'
-            )
+            converted = pd.to_datetime(df[outra_col],dayfirst=False,errors='coerce')
 
             # bad_values = df.loc[converted.isna(), date_col].unique() tava dando erro porque dayfirst era falso
             # print(bad_values)
