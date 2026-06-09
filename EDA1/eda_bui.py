@@ -69,7 +69,8 @@ COLUNAS_PT = {
     "Escola":                  "escola",
     "Nº Censo Escola":          "num_escola",
 }
-
+DIAS_ANALISE=[list(range(1,32))] #lista de dias do mes de agosto 
+TIPOS=["agosto\\BE","agosto\\BU","agosto\\GT"]
 SENTIDO_MAP = {0: "Não informado", 1: "Ida", 2: "Volta"}
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -188,14 +189,27 @@ def secao_valores(df: pd.DataFrame, out: Path):
     cols_val = [("vl_linha", "Vl Linha (R$)"),
                 ("vl_trans", "Vl Trans (R$)"),
                 ("vl_subsidio", "Vl Subsídio (R$)")]
+    
+    valores = { #quero so olhar essas colunas, so que considerando todos os arquivos do mes
+    "vl_linha": [],
+    "vl_trans": [],
+    "vl_subsidio": []
+    }
+    for pasta in TIPOS:
+        with os.scandir(pasta) as files:
+            for file in files:
+                dia = load_data(file.path, ";")
+                for col in valores:
+                    if col in dia.columns:
+                        valores[col].append(dia[col].dropna()) #itera sobre todos os arquivos de agosto, adiciona apenas essas colunas
 
     for ax, (col, label) in zip(axes, cols_val):
-        if col in df.columns:
-            sns.histplot(df[col].dropna(), kde=True, ax=ax, color="steelblue", bins=30)
-            ax.set_title(label)
-            ax.set_xlabel("R$")
-            ax.set_ylabel("Frequência")
-            ax.xaxis.set_major_formatter(mticker.FormatStrFormatter("%.2f"))
+        serie = pd.concat(valores[col], ignore_index=True) #junta todas as series achadas dessa coluna em uma linha para gerar histograma da coluna tal
+        sns.histplot(serie, kde=False, ax=ax, color="steelblue", bins=30)
+        ax.set_title(label)
+        ax.set_xlabel("R$")
+        ax.set_ylabel("Frequência")
+        ax.xaxis.set_major_formatter(mticker.FormatStrFormatter("%.2f"))
 
     plt.suptitle("Distribuição dos Valores Monetários", fontweight="bold", y=1.02)
     plt.tight_layout()
@@ -217,7 +231,7 @@ def secao_valores(df: pd.DataFrame, out: Path):
     # Percentual de subsídio
     if "pct_subsidio" in df.columns:
         fig, ax = plt.subplots(figsize=(8, 4))
-        sns.histplot(df["pct_subsidio"].dropna().clip(0, 100), bins=40, kde=True, ax=ax, color="coral")
+        sns.histplot(df["pct_subsidio"].dropna().clip(0, 100), bins=40, kde=False, ax=ax, color="coral")
         ax.set_title("Distribuição do Percentual de Subsídio (% do Vl Linha)")
         ax.set_xlabel("% Subsídio")
         ax.set_ylabel("Frequência")
@@ -233,11 +247,34 @@ def secao_valores(df: pd.DataFrame, out: Path):
 def secao_temporal(df: pd.DataFrame, out: Path):
     print("[3/7] Análise Temporal")
 
+    diarios = []
+    horas = []
+    dias_semana = []
+    diarios = []
+    latencias = []
+    
+    for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
+        with os.scandir(pasta) as files:
+            for file in files:
+                dia = load_data(file.path, ";")
+                if "hora" in dia:
+                    horas.append(dia["hora"].dropna())
+
+                if "dia_semana" in dia:
+                    dias_semana.append(dia["dia_semana"].dropna())
+
+                if all(c in dia.columns for c in ["data_dia", "num_cartao", "vl_subsidio"]): #so entra se dia tem todas essas colunas
+                    diarios.append(dia[["data_dia", "num_cartao", "vl_subsidio"]])
+
+                if all(c in dia.columns for c in ["data_transacao", "data_processamento"]): #idem
+                    latencias.append(dia[["data_transacao", "data_processamento"]])
+
     # Transações por hora do dia
     if "hora" in df.columns:
         fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
 
-        hora_cnt = df["hora"].value_counts().sort_index()
+        hora = pd.concat(horas, ignore_index=True) #uma unica coluna com todas as horas do mes
+        hora_cnt = hora.value_counts().sort_index()
         axes[0].bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
         axes[0].set_title("Transações por Hora do Dia")
         axes[0].set_xlabel("Hora")
@@ -262,9 +299,11 @@ def secao_temporal(df: pd.DataFrame, out: Path):
     if "dia_semana" in df.columns:
         ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
         nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
-        map_dias   = dict(zip(ordem_dias, nomes_pt))
+        map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
 
-        dia_cnt = df["dia_semana"].map(map_dias).value_counts().reindex(nomes_pt)
+        dia_semana = pd.concat(dias_semana, ignore_index=True) #junta a coluna dia_semana do mes todo
+        dia_cnt = dia_semana.map(map_dias).value_counts().reindex(nomes_pt) 
+
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.bar(dia_cnt.index, dia_cnt.values, color="mediumseagreen", alpha=0.85)
         ax.set_title("Transações por Dia da Semana")
@@ -276,7 +315,9 @@ def secao_temporal(df: pd.DataFrame, out: Path):
 
     # Série diária (se houver mais de 1 dia)
     if "data_dia" in df.columns and df["data_dia"].nunique() > 1:
-        diario = df.groupby("data_dia").agg(
+        df_diario=pd.concat(diarios,ignore_index=True)
+
+        diario = df_diario.groupby("data_dia").agg(
             transacoes=("num_cartao","count"),
             subsidio_total=("vl_subsidio","sum")
         ).reset_index()
@@ -298,12 +339,14 @@ def secao_temporal(df: pd.DataFrame, out: Path):
 
     # Latência de processamento
     if "data_transacao" in df.columns and "data_processamento" in df.columns:
-        df["latencia_h"] = (df["data_processamento"] - df["data_transacao"]).dt.total_seconds() / 3600
-        lat = df["latencia_h"].dropna()
+        lat_df = pd.concat(latencias, ignore_index=True)
+        lat_df["latencia_h"] = (lat_df["data_processamento"] - lat_df["data_transacao"]).dt.total_seconds() / 3600
+        lat = lat_df["latencia_h"].dropna()
         lat_pos = lat[lat >= 0]
+
         if not lat_pos.empty:
             fig, ax = plt.subplots(figsize=(8, 4))
-            sns.histplot(lat_pos.clip(upper=lat_pos.quantile(0.99)), bins=40, kde=True, ax=ax, color="orchid")
+            sns.histplot(lat_pos.clip(upper=lat_pos.quantile(0.99)), bins=40, kde=False, ax=ax, color="orchid")
             ax.set_title("Latência de Processamento (horas)")
             ax.set_xlabel("Horas (transação → processamento)")
             ax.set_ylabel("Frequência")
