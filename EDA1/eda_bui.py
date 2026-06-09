@@ -64,10 +64,10 @@ COLUNAS_PT = {
     "Vl Subsídio":             "vl_subsidio",
     "Qtde Integrações":        "qtde_integracoes",
     "Data da Ordem":           "data_ordem",
-    "Nº Ordem":                "num_ordem", #campos particulares de BE e GT a partir dessa linha, nao da erro ao usar para BUI ou outros
-    "Transações":               "transacoes", 
-    "Escola":                  "escola",
-    "Nº Censo Escola":          "num_escola",
+    "Nº Ordem":                "num_ordem", #campos particulares de GT a partir dessa linha, nao da erro ao usar para BUI ou outros
+    # "Transações":               "transacoes", 
+    # "Escola":                  "escola",
+    # "Nº Censo Escola":          "num_escola", como nao usamos essas linhas ainda, vou excluir para funcionar o usecols
 }
 DIAS_ANALISE=[list(range(1,32))] #lista de dias do mes de agosto 
 TIPOS=["agosto\\BE","agosto\\BU","agosto\\GT"]
@@ -90,12 +90,12 @@ def parse_brl(series: pd.Series) -> pd.Series:
     )
 
 
-def load_data(path: str, sep: str = ";") -> pd.DataFrame:
+def load_data(path: str, sep: str = ";", cols_use: dict=COLUNAS_PT) -> pd.DataFrame:
     print(f"\n{'─'*60}")
     print(f"  Carregando: {path}")
     print(f"{'─'*60}")
 
-    df = pd.read_csv(path, sep=sep, encoding="utf-8-sig", dtype=str)
+    df = pd.read_csv(path, sep=sep, encoding="utf-8-sig", dtype=str,usecols=cols_use.keys())
 
     # Normalizar nomes de colunas (strip de espaços)
     df.columns = df.columns.str.strip()
@@ -189,23 +189,40 @@ def secao_valores(df: pd.DataFrame, out: Path):
     cols_val = [("vl_linha", "Vl Linha (R$)"),
                 ("vl_trans", "Vl Trans (R$)"),
                 ("vl_subsidio", "Vl Subsídio (R$)")]
-    
-    valores = { #quero so olhar essas colunas, so que considerando todos os arquivos do mes
-    "vl_linha": [],
-    "vl_trans": [],
-    "vl_subsidio": []
-    }
+
+    vl_linha_cnt=pd.Series(dtype=np.int64)
+    vl_trans_cnt=pd.Series(dtype=np.int64)
+    vl_subsidio_cnt=pd.Series(dtype=np.int64)
+    cols_in_use={
+        "Vl Linha":                "vl_linha",
+        "Vl Trans":                "vl_trans",
+        "Vl Subsídio":             "vl_subsidio",
+    } #colunas que vamos ler dos arquivos do mes
+
+
     for pasta in TIPOS:
         with os.scandir(pasta) as files:
             for file in files:
-                dia = load_data(file.path, ";")
-                for col in valores:
-                    if col in dia.columns:
-                        valores[col].append(dia[col].dropna()) #itera sobre todos os arquivos de agosto, adiciona apenas essas colunas
-
+                dia = load_data(file.path, ";",cols_in_use)
+                if "vl_linha" in dia.columns:
+                    cnt = dia["vl_linha"].value_counts()
+                    vl_linha_cnt = vl_linha_cnt.add(cnt, fill_value=0)
+                if "vl_trans" in dia.columns:
+                    cnt = dia["vl_trans"].value_counts()
+                    vl_trans_cnt = vl_trans_cnt.add(cnt, fill_value=0)
+                if "vl_subsidio" in dia.columns:
+                    cnt = dia["vl_subsidio"].value_counts()
+                    vl_subsidio_cnt = vl_subsidio_cnt.add(cnt, fill_value=0)
+    valores = { #manter num dict p economizar ficar mais legivel
+    "vl_linha": vl_linha_cnt,
+    "vl_trans": vl_trans_cnt,
+    "vl_subsidio": vl_subsidio_cnt
+    }
     for ax, (col, label) in zip(axes, cols_val):
-        serie = pd.concat(valores[col], ignore_index=True) #junta todas as series achadas dessa coluna em uma linha para gerar histograma da coluna tal
-        sns.histplot(serie, kde=False, ax=ax, color="steelblue", bins=30)
+        serie =valores[col]
+        serie.index = serie.index.astype(float)
+        serie=serie.sort_index()
+        ax.bar(serie.index.astype(float),serie.values)
         ax.set_title(label)
         ax.set_xlabel("R$")
         ax.set_ylabel("Frequência")
@@ -246,114 +263,120 @@ def secao_valores(df: pd.DataFrame, out: Path):
 
 def secao_temporal(df: pd.DataFrame, out: Path):
     print("[3/7] Análise Temporal")
-
-    diarios = []
-    horas = []
-    dias_semana = []
-    diarios = []
-    latencias = []
-    
+    hora_cnt = pd.Series(dtype=np.int64)
+    diario_trans = {}
+    diario_subs = {}
+    all_latencies = []
+    dia_semana_cnt = pd.Series(dtype=np.int64)
+    cols_in_use={
+        "Data da Transação":       "data_transacao",
+        "Data do Processamento":   "data_processamento",
+        "Vl Linha":                "vl_linha",
+        "Vl Trans":                "vl_trans",
+        "Vl Subsídio":             "vl_subsidio",
+    }
     for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
         with os.scandir(pasta) as files:
             for file in files:
-                dia = load_data(file.path, ";")
-                if "hora" in dia:
-                    horas.append(dia["hora"].dropna())
+                dia = load_data(file.path, ";",cols_in_use)
+                if "hora" in dia.columns:
+                    cnt = dia["hora"].value_counts()
+                    hora_cnt = hora_cnt.add(cnt, fill_value=0)
 
-                if "dia_semana" in dia:
-                    dias_semana.append(dia["dia_semana"].dropna())
+                if "dia_semana" in dia.columns:
+                    ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+                    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+                    map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
+                    cnt=dia["dia_semana"].map(map_dias).value_counts().reindex(nomes_pt)
+                    dia_semana_cnt=dia_semana_cnt.add(cnt,fill_value=0)
 
                 if all(c in dia.columns for c in ["data_dia", "num_cartao", "vl_subsidio"]): #so entra se dia tem todas essas colunas
-                    diarios.append(dia[["data_dia", "num_cartao", "vl_subsidio"]])
+                    grp = dia.groupby("data_dia").agg(
+                            transacoes=("num_cartao", "count"),
+                            subsidio_total=("vl_subsidio", "sum"))
+                    for data, row in grp.iterrows():
+                        diario_trans[data] = (diario_trans.get(data, 0)+ row["transacoes"])
+                        diario_subs[data] = (diario_subs.get(data, 0.0)+ row["subsidio_total"])
 
                 if all(c in dia.columns for c in ["data_transacao", "data_processamento"]): #idem
-                    latencias.append(dia[["data_transacao", "data_processamento"]])
+                    lat = (dia["data_processamento"]- dia["data_transacao"]).dt.total_seconds() / 3600
+                    lat = lat[lat >= 0]
+                    all_latencies.append(lat)
+    hora_cnt = hora_cnt.sort_index()
 
     # Transações por hora do dia
-    if "hora" in df.columns:
-        fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
+    fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
+    axes[0].bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
+    axes[0].set_title("Transações por Hora do Dia")
+    axes[0].set_xlabel("Hora")
+    axes[0].set_ylabel("Nº de Transações")
+    axes[0].set_xticks(range(0, 24))
 
-        hora = pd.concat(horas, ignore_index=True) #uma unica coluna com todas as horas do mes
-        hora_cnt = hora.value_counts().sort_index()
-        axes[0].bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
-        axes[0].set_title("Transações por Hora do Dia")
-        axes[0].set_xlabel("Hora")
-        axes[0].set_ylabel("Nº de Transações")
-        axes[0].set_xticks(range(0, 24))
+    # Subsídio médio por hora
+    if "vl_subsidio" in df.columns:
+        hora_sub = df.groupby("hora")["vl_subsidio"].mean()
+        axes[1].plot(hora_sub.index, hora_sub.values, marker="o", color="coral")
+        axes[1].set_title("Subsídio Médio por Hora do Dia")
+        axes[1].set_xlabel("Hora")
+        axes[1].set_ylabel("Subsídio Médio (R$)")
+        axes[1].set_xticks(range(0, 24))
 
-        # Subsídio médio por hora
-        if "vl_subsidio" in df.columns:
-            hora_sub = df.groupby("hora")["vl_subsidio"].mean()
-            axes[1].plot(hora_sub.index, hora_sub.values, marker="o", color="coral")
-            axes[1].set_title("Subsídio Médio por Hora do Dia")
-            axes[1].set_xlabel("Hora")
-            axes[1].set_ylabel("Subsídio Médio (R$)")
-            axes[1].set_xticks(range(0, 24))
-
-        plt.suptitle("Padrão Temporal das Transações", fontweight="bold")
-        plt.tight_layout()
-        plt.savefig(out / "03_analise_temporal_hora.png", dpi=150, bbox_inches="tight")
-        plt.close()
+    plt.suptitle("Padrão Temporal das Transações", fontweight="bold")
+    plt.tight_layout()
+    plt.savefig(out / "03_analise_temporal_hora.png", dpi=150, bbox_inches="tight")
+    plt.close()
 
     # Transações por dia da semana
-    if "dia_semana" in df.columns:
-        ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
-        nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
-        map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
+    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+    dia_cnt = dia_semana_cnt.reindex(nomes_pt, fill_value=0)
 
-        dia_semana = pd.concat(dias_semana, ignore_index=True) #junta a coluna dia_semana do mes todo
-        dia_cnt = dia_semana.map(map_dias).value_counts().reindex(nomes_pt) 
-
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.bar(dia_cnt.index, dia_cnt.values, color="mediumseagreen", alpha=0.85)
-        ax.set_title("Transações por Dia da Semana")
-        ax.set_xlabel("Dia")
-        ax.set_ylabel("Nº de Transações")
-        plt.tight_layout()
-        plt.savefig(out / "03b_transacoes_dia_semana.png", dpi=150, bbox_inches="tight")
-        plt.close()
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.bar(dia_cnt.index, dia_cnt.values, color="mediumseagreen", alpha=0.85)
+    ax.set_title("Transações por Dia da Semana")
+    ax.set_xlabel("Dia")
+    ax.set_ylabel("Nº de Transações")
+    plt.tight_layout()
+    plt.savefig(out / "03b_transacoes_dia_semana.png", dpi=150, bbox_inches="tight")
+    plt.close()
 
     # Série diária (se houver mais de 1 dia)
-    if "data_dia" in df.columns and df["data_dia"].nunique() > 1:
-        df_diario=pd.concat(diarios,ignore_index=True)
+    diario = pd.DataFrame({
+        "data_dia": list(diario_trans.keys()),
+        "transacoes": list(diario_trans.values())
+    })
 
-        diario = df_diario.groupby("data_dia").agg(
-            transacoes=("num_cartao","count"),
-            subsidio_total=("vl_subsidio","sum")
-        ).reset_index()
+    diario["subsidio_total"] = diario["data_dia"].map(diario_subs)
 
-        fig, ax1 = plt.subplots(figsize=FIGSIZE_WIDE)
-        ax1.bar(diario["data_dia"].astype(str), diario["transacoes"], alpha=0.6, label="Transações")
-        ax2 = ax1.twinx()
-        ax2.plot(diario["data_dia"].astype(str), diario["subsidio_total"], color="red",
-                 marker="o", linewidth=2, label="Subsídio Total")
-        ax1.set_xlabel("Data")
-        ax1.set_ylabel("Nº Transações")
-        ax2.set_ylabel("Subsídio Total (R$)")
-        ax1.tick_params(axis="x", rotation=45)
-        plt.title("Série Diária — Transações e Subsídio")
-        fig.legend(loc="upper left", bbox_to_anchor=(0.1, 0.95))
-        plt.tight_layout()
-        plt.savefig(out / "03c_serie_diaria.png", dpi=150, bbox_inches="tight")
-        plt.close()
+    diario = diario.sort_values("data_dia")
+
+    fig, ax1 = plt.subplots(figsize=FIGSIZE_WIDE)
+    ax1.bar(diario["data_dia"].astype(str), diario["transacoes"], alpha=0.6, label="Transações")
+    ax2 = ax1.twinx()
+    ax2.plot(diario["data_dia"].astype(str), diario["subsidio_total"], color="red",
+                marker="o", linewidth=2, label="Subsídio Total")
+    ax1.set_xlabel("Data")
+    ax1.set_ylabel("Nº Transações")
+    ax2.set_ylabel("Subsídio Total (R$)")
+    ax1.tick_params(axis="x", rotation=45)
+    plt.title("Série Diária — Transações e Subsídio")
+    fig.legend(loc="upper left", bbox_to_anchor=(0.1, 0.95))
+    plt.tight_layout()
+    plt.savefig(out / "03c_serie_diaria.png", dpi=150, bbox_inches="tight")
+    plt.close()
 
     # Latência de processamento
-    if "data_transacao" in df.columns and "data_processamento" in df.columns:
-        lat_df = pd.concat(latencias, ignore_index=True)
-        lat_df["latencia_h"] = (lat_df["data_processamento"] - lat_df["data_transacao"]).dt.total_seconds() / 3600
-        lat = lat_df["latencia_h"].dropna()
-        lat_pos = lat[lat >= 0]
+    lat_pos = pd.concat(all_latencies, ignore_index=True)
 
-        if not lat_pos.empty:
-            fig, ax = plt.subplots(figsize=(8, 4))
-            sns.histplot(lat_pos.clip(upper=lat_pos.quantile(0.99)), bins=40, kde=False, ax=ax, color="orchid")
-            ax.set_title("Latência de Processamento (horas)")
-            ax.set_xlabel("Horas (transação → processamento)")
-            ax.set_ylabel("Frequência")
-            plt.tight_layout()
-            plt.savefig(out / "03d_latencia_processamento.png", dpi=150, bbox_inches="tight")
-            plt.close()
-            print(f"  Latência média: {lat_pos.mean():.1f} h | mediana: {lat_pos.median():.1f} h")
+    if not lat_pos.empty:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        sns.histplot(lat_pos.clip(upper=lat_pos.quantile(0.99)), bins=40, kde=False, ax=ax, color="orchid")
+        ax.set_title("Latência de Processamento (horas)")
+        ax.set_xlabel("Horas (transação → processamento)")
+        ax.set_ylabel("Frequência")
+        plt.tight_layout()
+        plt.savefig(out / "03d_latencia_processamento.png", dpi=150, bbox_inches="tight")
+        plt.close()
+        print(f"  Latência média: {lat_pos.mean():.1f} h | mediana: {lat_pos.median():.1f} h")
 
 
 # ════════════════════════════════════════════════════════════════════════════
