@@ -64,12 +64,41 @@ COLUNAS_PT = {
     "Vl Subsídio":             "vl_subsidio",
     "Qtde Integrações":        "qtde_integracoes",
     "Data da Ordem":           "data_ordem",
-    "Nº Ordem":                "num_ordem", #campos particulares de GT a partir dessa linha, nao da erro ao usar para BUI ou outros
-    # "Transações":               "transacoes", 
-    # "Escola":                  "escola",
-    # "Nº Censo Escola":          "num_escola", como nao usamos essas linhas ainda, vou excluir para funcionar o usecols
+    "Nº Ordem":                "num_ordem",
 }
-DIAS_ANALISE=[list(range(1,32))] #lista de dias do mes de agosto 
+COLUNAS_BE={
+    "Nº Cartão":               "num_cartao",
+    "Descrição da Aplicação":  "descricao_aplicacao",
+    "Sindicato":               "sindicato",
+    "Operadora":               "operadora",
+    "Linha":                   "linha",
+    "Nº Carro":                "num_carro",
+    "Sentido":                 "sentido",
+    "Nº Validador":            "num_validador",
+    "Data da Transação":       "data_transacao",
+    "Data do Processamento":   "data_processamento",
+    "Vl Linha":                "vl_linha",
+    "Vl Trans":                "vl_trans",
+    "Vl Subsídio":             "vl_subsidio",
+}
+COLUNAS_GT={
+    "Nº Cartão":               "num_cartao",
+    "Descrição da Aplicação":  "descricao_aplicacao",
+    "Sindicato":               "sindicato",
+    "Operadora":               "operadora",
+    "Linha":                   "linha",
+    "Nº Carro":                "num_carro",
+    "Sentido":                 "sentido",
+    "Nº Validador":            "num_validador",
+    "Data da Transação":       "data_transacao",
+    "Data do Processamento":   "data_processamento",
+    "Qtde Integrações":        "qtde_integracoes",
+    "Data da Ordem":           "data_ordem",
+    "Nº Ordem":                "num_ordem", #campos particulares de GT a partir dessa linha, nao da erro ao usar para BUI ou outros
+    "Transações":               "transacoes", 
+    "Escola":                  "escola",
+    "Nº Censo Escola":          "num_escola",
+}
 TIPOS=["agosto\\BE","agosto\\BU","agosto\\GT"]
 SENTIDO_MAP = {0: "Não informado", 1: "Ida", 2: "Volta"}
 
@@ -90,11 +119,16 @@ def parse_brl(series: pd.Series) -> pd.Series:
     )
 
 
-def load_data(path: str, sep: str = ";", cols_use: dict=COLUNAS_PT) -> pd.DataFrame:
+def load_data(path: str, sep: str = ";", tipo: str="BE" ) -> pd.DataFrame:
     print(f"\n{'─'*60}")
     print(f"  Carregando: {path}")
     print(f"{'─'*60}")
-
+    if tipo=="BE":
+        cols_use=COLUNAS_BE
+    if tipo=="BU":
+        cols_use=COLUNAS_PT
+    if tipo=="GT":
+        cols_use=COLUNAS_GT
     df = pd.read_csv(path, sep=sep, encoding="utf-8-sig", dtype=str,usecols=cols_use.keys())
 
     # Normalizar nomes de colunas (strip de espaços)
@@ -203,7 +237,7 @@ def secao_valores(df: pd.DataFrame, out: Path):
     for pasta in TIPOS:
         with os.scandir(pasta) as files:
             for file in files:
-                dia = load_data(file.path, ";",cols_in_use)
+                dia = load_data(file.path, ";",pasta[-2:]) #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
                 if "vl_linha" in dia.columns:
                     cnt = dia["vl_linha"].value_counts()
                     vl_linha_cnt = vl_linha_cnt.add(cnt, fill_value=0)
@@ -219,7 +253,7 @@ def secao_valores(df: pd.DataFrame, out: Path):
     "vl_subsidio": vl_subsidio_cnt
     }
     for ax, (col, label) in zip(axes, cols_val):
-        serie =valores[col]
+        serie =valores[col].sort_index()
         serie.index = serie.index.astype(float)
         serie=serie.sort_index()
         ax.bar(serie.index.astype(float),serie.values)
@@ -278,7 +312,7 @@ def secao_temporal(df: pd.DataFrame, out: Path):
     for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
         with os.scandir(pasta) as files:
             for file in files:
-                dia = load_data(file.path, ";",cols_in_use)
+                dia = load_data(file.path, ";",pasta[-2:])
                 if "hora" in dia.columns:
                     cnt = dia["hora"].value_counts()
                     hora_cnt = hora_cnt.add(cnt, fill_value=0)
