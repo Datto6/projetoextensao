@@ -26,7 +26,7 @@ Uso:
     O arquivo pode ser CSV ou TXT delimitado por ponto-e-vírgula.
     Os valores monetários devem estar no formato brasileiro: R$ 1.234,56
 """
-
+import time 
 import argparse
 import os
 import warnings
@@ -56,7 +56,7 @@ COLUNAS_PT = {
     "Linha":                   "linha",
     "Nº Carro":                "num_carro",
     "Sentido":                 "sentido",
-    "Nº Validador":            "num_validador",
+    # "Nº Validador":            "num_validador", tava dando erro na leitura disso, apenas tirei pois nao usamos
     "Data da Transação":       "data_transacao",
     "Data do Processamento":   "data_processamento",
     "Vl Linha":                "vl_linha",
@@ -74,7 +74,7 @@ COLUNAS_BE={
     "Linha":                   "linha",
     "Nº Carro":                "num_carro",
     "Sentido":                 "sentido",
-    "Nº Validador":            "num_validador",
+    # "Nº Validador":            "num_validador",  tava dando erro na leitura disso, apenas tirei pois nao usamos
     "Data da Transação":       "data_transacao",
     "Data do Processamento":   "data_processamento",
     "Vl Linha":                "vl_linha",
@@ -88,13 +88,9 @@ COLUNAS_GT={
     "Operadora":               "operadora",
     "Linha":                   "linha",
     "Nº Carro":                "num_carro",
-    "Sentido":                 "sentido",
     "Nº Validador":            "num_validador",
     "Data da Transação":       "data_transacao",
     "Data do Processamento":   "data_processamento",
-    "Qtde Integrações":        "qtde_integracoes",
-    "Data da Ordem":           "data_ordem",
-    "Nº Ordem":                "num_ordem", #campos particulares de GT a partir dessa linha, nao da erro ao usar para BUI ou outros
     "Transações":               "transacoes", 
     "Escola":                  "escola",
     "Nº Censo Escola":          "num_escola",
@@ -239,7 +235,7 @@ def secao_valores(df: pd.DataFrame, out: Path):
             for file in files:
                 dia = load_data(file.path, ";",pasta[-2:]) #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
                 if "vl_linha" in dia.columns:
-                    cnt = dia["vl_linha"].value_counts()
+                    cnt = dia["vl_linha"].value_counts() 
                     vl_linha_cnt = vl_linha_cnt.add(cnt, fill_value=0)
                 if "vl_trans" in dia.columns:
                     cnt = dia["vl_trans"].value_counts()
@@ -253,10 +249,18 @@ def secao_valores(df: pd.DataFrame, out: Path):
     "vl_subsidio": vl_subsidio_cnt
     }
     for ax, (col, label) in zip(axes, cols_val):
-        serie =valores[col].sort_index()
-        serie.index = serie.index.astype(float)
-        serie=serie.sort_index()
-        ax.bar(serie.index.astype(float),serie.values)
+        serie = valores[col].sort_index()
+        bins = np.arange(0, 30, 0.5)
+        # Criar bins p cada valor distinto
+        bin_ids = pd.cut(serie.index.astype(float),bins=bins,include_lowest=True)
+
+        # Somar frequencias dentro de cada bin
+        hist = serie.groupby(bin_ids).sum()
+
+        # Centros de bin p plotar
+        centers = [(interval.left + interval.right)/2 for interval in hist.index]
+
+        ax.bar(centers,hist.values,width=0.5)
         ax.set_title(label)
         ax.set_xlabel("R$")
         ax.set_ylabel("Frequência")
@@ -312,7 +316,7 @@ def secao_temporal(df: pd.DataFrame, out: Path):
     for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
         with os.scandir(pasta) as files:
             for file in files:
-                dia = load_data(file.path, ";",pasta[-2:])
+                dia = load_data(file.path, ";",pasta[-2:]) #pasta [-2:] indica do tipo da entrada,definida no diretorio
                 if "hora" in dia.columns:
                     cnt = dia["hora"].value_counts()
                     hora_cnt = hora_cnt.add(cnt, fill_value=0)
@@ -598,6 +602,7 @@ def secao_anomalias(df: pd.DataFrame, out: Path):
 # ════════════════════════════════════════════════════════════════════════════
 
 def main():
+    start_time = time.perf_counter()
     parser = argparse.ArgumentParser(
         description="EDA — Bilhete Único Intermunicipal (BUI)"
     )
@@ -622,6 +627,10 @@ def main():
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")
     print(f"{'═'*60}\n")
+
+    end_time = time.perf_counter()
+    execution_time = end_time - start_time
+    print(f"Execution time: {execution_time:.6f} seconds")
 
 
 if __name__ == "__main__":
