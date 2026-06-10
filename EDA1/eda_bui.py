@@ -164,13 +164,18 @@ def load_data(path: str, cols_use:dict, sep: str = ";") -> pd.DataFrame:
     return df
 
 def load_data_spec(path: str, cols_use:dict, tipo:str,sep: str=";"):
+    #auxiliar de load_data que especifica as colunas a serem lidas, e pula a leitura se nao ha nenhuma coluna em comum, usando o dicionario que ja sabemos que existe
     dicionario_tipo=pega_dict(tipo)
 
-    if all(c in dicionario_tipo for c in cols_use):
-        return load_data(path,cols_use,sep)
-    else:
-        return pd.DataFrame()
-    #so quero usar as colunas que eu quero, tentando ler menos coisas
+    available_cols = { #pegar colunas em comum com cols_use e dicionario do tipo
+        k: v for k, v in cols_use.items()
+        if k in dicionario_tipo
+    }
+
+    if available_cols:
+        return load_data(path, available_cols, sep) #passar elas pro load_data
+
+    return pd.DataFrame() 
 # ════════════════════════════════════════════════════════════════════════════
 # 2. VISÃO GERAL
 # ════════════════════════════════════════════════════════════════════════════
@@ -316,6 +321,7 @@ def secao_temporal(df: pd.DataFrame, out: Path):
         "Vl Linha":                "vl_linha",
         "Vl Trans":                "vl_trans",
         "Vl Subsídio":             "vl_subsidio",
+        "Nº Cartão": "num_cartao",
     }
     for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
         with os.scandir(pasta) as files:
