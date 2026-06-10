@@ -48,7 +48,7 @@ FIGSIZE_WIDE = (14, 5)
 FIGSIZE_SQ   = (10, 7)
 FIGSIZE_TALL = (12, 8)
 
-COLUNAS_PT = {
+COLUNAS_BU = {
     "Nº Cartão":               "num_cartao",
     "Descrição da Aplicação":  "descricao_aplicacao",
     "Sindicato":               "sindicato",
@@ -113,23 +113,20 @@ def parse_brl(series: pd.Series) -> pd.Series:
         .replace("", np.nan)
         .astype(float)
     )
+def pega_dict(tipo: str) -> dict:
+    if tipo=="BE": return COLUNAS_BE
+    if tipo=="BU": return COLUNAS_BU
+    if tipo=="GT": return COLUNAS_GT
 
-
-def load_data(path: str, sep: str = ";", tipo: str="BE" ) -> pd.DataFrame:
+def load_data(path: str, cols_use:dict, sep: str = ";") -> pd.DataFrame:
     print(f"\n{'─'*60}")
     print(f"  Carregando: {path}")
     print(f"{'─'*60}")
-    if tipo=="BE":
-        cols_use=COLUNAS_BE
-    if tipo=="BU":
-        cols_use=COLUNAS_PT
-    if tipo=="GT":
-        cols_use=COLUNAS_GT
     df = pd.read_csv(path, sep=sep, encoding="utf-8-sig", dtype=str,usecols=cols_use.keys())
 
     # Normalizar nomes de colunas (strip de espaços)
     df.columns = df.columns.str.strip()
-    df.rename(columns=COLUNAS_PT, inplace=True)
+    df.rename(columns=cols_use, inplace=True)
 
     # Datas
     for col in ["data_transacao", "data_processamento", "data_ordem"]:
@@ -166,7 +163,14 @@ def load_data(path: str, sep: str = ";", tipo: str="BE" ) -> pd.DataFrame:
     print(f"  Período: {df['data_transacao'].min()} → {df['data_transacao'].max()}" if "data_transacao" in df.columns else "")
     return df
 
+def load_data_spec(path: str, cols_use:dict, tipo:str,sep: str=";"):
+    dicionario_tipo=pega_dict(tipo)
 
+    if all(c in dicionario_tipo for c in cols_use):
+        return load_data(path,cols_use,sep)
+    else:
+        return pd.DataFrame()
+    #so quero usar as colunas que eu quero, tentando ler menos coisas
 # ════════════════════════════════════════════════════════════════════════════
 # 2. VISÃO GERAL
 # ════════════════════════════════════════════════════════════════════════════
@@ -233,7 +237,7 @@ def secao_valores(df: pd.DataFrame, out: Path):
     for pasta in TIPOS:
         with os.scandir(pasta) as files:
             for file in files:
-                dia = load_data(file.path, ";",pasta[-2:]) #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
+                dia = load_data_spec(file.path,cols_in_use,pasta[-2:], ";") #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
                 if "vl_linha" in dia.columns:
                     cnt = dia["vl_linha"].value_counts() 
                     vl_linha_cnt = vl_linha_cnt.add(cnt, fill_value=0)
@@ -316,7 +320,7 @@ def secao_temporal(df: pd.DataFrame, out: Path):
     for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
         with os.scandir(pasta) as files:
             for file in files:
-                dia = load_data(file.path, ";",pasta[-2:]) #pasta [-2:] indica do tipo da entrada,definida no diretorio
+                dia = load_data_spec(file.path,cols_in_use,pasta[-2:],";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
                 if "hora" in dia.columns:
                     cnt = dia["hora"].value_counts()
                     hora_cnt = hora_cnt.add(cnt, fill_value=0)
@@ -607,14 +611,15 @@ def main():
         description="EDA — Bilhete Único Intermunicipal (BUI)"
     )
     parser.add_argument("--input",  required=True, help="Caminho do arquivo de dados (.txt/.csv)")
+    parser.add_argument("--tipo",required=True, help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
     parser.add_argument("--output", default="relatorio_eda", help="Pasta de saída")
     args = parser.parse_args()
 
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
-
-    df = load_data(args.input, sep=args.sep)
+    cols_use=pega_dict(args.tipo)
+    df = load_data_spec(args.input, cols_use=cols_use,tipo=args.tipo,sep=args.sep)
 
     secao_visao_geral(df, out)
     secao_valores(df, out)
