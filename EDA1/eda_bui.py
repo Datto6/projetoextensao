@@ -31,6 +31,7 @@ import argparse
 import os
 import warnings
 from pathlib import Path
+from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -443,15 +444,81 @@ def secao_entidades(df: pd.DataFrame, out: Path):
     print("[4/7] Análise por Entidade")
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 7))
+    cols_in_use={
+        "Operadora":               "operadora",
+        "Vl Linha":                "vl_linha",
+        "Vl Trans":                "vl_trans",
+        "Vl Subsídio":             "vl_subsidio",
+        "Linha":                   "linha",
+        "Sindicato":               "sindicato",
+        "pct_subsidio":            "pct_subsidio",
+        "Nº Cartão": "num_cartao",
+    }
+    operadora_cnt = pd.Series(dtype=np.int64)
+    linha_cnt = pd.Series(dtype=np.int64)
+    sindicato_cnt = pd.Series(dtype=np.int64)
+    subsidio_operadora = pd.Series(dtype=float) #definindo series especificas para usar para o mes todo
 
+    transacoes = defaultdict(int)
+
+    vl_linha_sum = defaultdict(float)
+    vl_linha_count = defaultdict(int)
+    
+    vl_trans_sum = defaultdict(float)
+    vl_trans_count = defaultdict(int)
+
+    subsidio_total = defaultdict(float)
+
+    pct_sum = defaultdict(float)
+    pct_count = defaultdict(int)
+
+    cartoes_unicos = defaultdict(set)#tudo isso aqui para fazer media depois no final
+
+    for pasta in TIPOS:
+        with os.scandir(pasta) as files:
+            for file in files:
+                dia = load_data_spec(file.path,cols_in_use,pasta[-2:], ";") #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
+                if "operadora" in dia.columns: #transacoes por operadora 
+                    cnt = dia["operadora"].value_counts()
+                    operadora_cnt = operadora_cnt.add(cnt, fill_value=0)
+                if "vl_subsidio" in dia.columns and "operadora" in dia.columns: #contando subsidio por operadora 
+                    sub = dia.groupby("operadora")["vl_subsidio"].sum()
+                    subsidio_operadora = subsidio_operadora.add(sub, fill_value=0)
+                if all(c in dia.columns for c in ["linha", "vl_linha","vl_trans","pct_subsidio","num_cartao"]): #se dia tem todas essas colunas
+                    cnt = dia["linha"].value_counts()
+                    linha_cnt = linha_cnt.add(cnt, fill_value=0) #contando transacoes por linha 
+                    for linha, grp in dia.groupby("linha"):
+                        transacoes[linha] += len(grp)
+
+                        vl_linha_sum[linha] += grp["vl_linha"].sum()
+                        vl_linha_count[linha] += grp["vl_linha"].notna().sum()
+
+                        vl_trans_sum[linha] += grp["vl_trans"].sum()
+                        vl_trans_count[linha] += grp["vl_trans"].notna().sum()
+
+                        subsidio_total[linha] += grp["vl_subsidio"].sum()
+
+                        pct_sum[linha] += grp["pct_subsidio"].sum()
+                        pct_count[linha] += grp["pct_subsidio"].notna().sum()
+
+                        cartoes_unicos[linha].update(grp["num_cartao"].dropna()) #construcao de resumo por linha
+
+                if "sindicato" in dia.columns: #transacoes por sindicato
+                    cnt = dia["sindicato"].value_counts()
+                    sindicato_cnt = sindicato_cnt.add(cnt, fill_value=0)
+
+    valores = { #manter num dict p economizar ficar mais legivel
+    "operadora": operadora_cnt,
+    "linha": linha_cnt,
+    "sindicato": sindicato_cnt,
+    "subsidio": subsidio_operadora
+    }
     for ax, (col, label, cor) in zip(axes, [
         ("operadora", "Operadora", "steelblue"),
         ("linha",     "Linha",     "mediumseagreen"),
         ("sindicato", "Sindicato", "coral"),
     ]):
-        if col in df.columns:
-            top_bar(df[col].value_counts(), f"Top 15 — {label} (nº transações)",
-                    "Nº Transações", ax, color=cor)
+        top_bar(valores[col], f"Top 15 — {label} (nº transações)","Nº Transações", ax, color=cor)
 
     plt.suptitle("Ranking por Entidade", fontweight="bold")
     plt.tight_layout()
@@ -459,26 +526,45 @@ def secao_entidades(df: pd.DataFrame, out: Path):
     plt.close()
 
     # Subsídio total por operadora
-    if "operadora" in df.columns and "vl_subsidio" in df.columns:
-        sub_op = df.groupby("operadora")["vl_subsidio"].sum().nlargest(15)
-        fig, ax = plt.subplots(figsize=(10, 6))
-        top_bar(sub_op, "Top 15 Operadoras — Subsídio Total (R$)", "R$", ax, color="darkorange")
-        plt.tight_layout()
-        plt.savefig(out / "04b_subsidio_por_operadora.png", dpi=150, bbox_inches="tight")
-        plt.close()
+    sub_op = valores["subsidio"].nlargest(15)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    top_bar(sub_op, "Top 15 Operadoras — Subsídio Total (R$)", "R$", ax, color="darkorange")
+    plt.tight_layout()
+    plt.savefig(out / "04b_subsidio_por_operadora.png", dpi=150, bbox_inches="tight")
+    plt.close()
 
     # Exportar tabela resumo por linha
-    if "linha" in df.columns:
-        resumo_linha = df.groupby("linha").agg(
-            transacoes=("num_cartao","count"),
-            cartoes_unicos=("num_cartao","nunique"),
-            vl_linha_medio=("vl_linha","mean"),
-            vl_trans_medio=("vl_trans","mean"),
-            vl_subsidio_total=("vl_subsidio","sum"),
-            pct_subsidio_medio=("pct_subsidio","mean"),
-        ).round(2).sort_values("transacoes", ascending=False)
-        resumo_linha.to_csv(out / "04c_resumo_por_linha.csv")
-        print(f"  Resumo por linha exportado ({len(resumo_linha)} linhas).")
+    linhas = transacoes.keys()
+
+    resumo_linha = pd.DataFrame({
+        "transacoes": [transacoes[l] for l in linhas],
+        "linha": list(linhas),
+        "cartoes_unicos": [len(cartoes_unicos[l]) for l in linhas],
+        "vl_linha_medio": [
+            vl_linha_sum[l] / vl_linha_count[l]
+            if vl_linha_count[l] else np.nan
+            for l in linhas
+        ],
+        "vl_trans_medio": [
+            vl_trans_sum[l] / vl_trans_count[l]
+            if vl_trans_count[l] else np.nan
+            for l in linhas
+        ],
+        "vl_subsidio_total": [
+            subsidio_total[l]
+            for l in linhas
+        ],
+        "pct_subsidio_medio": [
+            pct_sum[l] / pct_count[l]
+            if pct_count[l] else np.nan
+            for l in linhas
+        ]
+    })
+    resumo_linha = (resumo_linha.sort_values("transacoes", ascending=False).round(2))
+    print(resumo_linha.columns.tolist())     
+    resumo_linha.to_csv(out / "04c_resumo_por_linha.csv",index=False)
+    print(f"  Resumo por linha exportado ({len(resumo_linha)} linhas).")
+
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -489,36 +575,64 @@ def secao_sentido_integracoes(df: pd.DataFrame, out: Path):
     print("[5/7] Sentido e Integrações")
 
     fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
+    cols_in_use={
+        "Sentido":                 "sentido",
+        "sentido_label":       "sentido_label",
+        "Qtde Integrações":   "qtde_integracoes",
+        "Vl Linha":                "vl_linha",
+        "Vl Subsídio":             "vl_subsidio",
+    }
+    subsidio_sum = pd.Series(dtype=float)
+    subsidio_count = pd.Series(dtype=np.int64)
+    sentido_cnt=pd.Series(dtype=np.int64)
+    integracoes_cnt=pd.Series(dtype=np.int64)
 
-    if "sentido_label" in df.columns:
-        cnt = df["sentido_label"].value_counts()
-        axes[0].pie(cnt.values, labels=cnt.index, autopct="%1.1f%%",
-                    startangle=90, colors=sns.color_palette("pastel"))
-        axes[0].set_title("Distribuição por Sentido")
+    for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
+        with os.scandir(pasta) as files:
+            for file in files:
+                dia = load_data_spec(file.path,cols_in_use,pasta[-2:],";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
+                if "sentido_label" in dia.columns:
+                    cnt = dia["sentido_label"].value_counts()
+                    sentido_cnt = sentido_cnt.add(cnt, fill_value=0)
+                if "qtde_integracoes" in dia.columns:
+                    cnt=dia["qtde_integracoes"].value_counts().sort_index()
+                    integracoes_cnt=integracoes_cnt.add(cnt, fill_value=0)
+                if "qtde_integracoes" in dia.columns and "vl_subsidio" in dia.columns: #so entra se dia tem todas essas colunas
+                    dia["tem_integracao"] = (dia["qtde_integracoes"] > 0).map({True:"Com integração", False:"Sem integração"})
+                    
+                    grp_sum = dia.groupby("tem_integracao")["vl_subsidio"].sum()
+                    grp_count = dia.groupby("tem_integracao")["vl_subsidio"].count()
+                    subsidio_sum = subsidio_sum.add(grp_sum, fill_value=0)
+                    subsidio_count = subsidio_count.add(grp_count, fill_value=0)
 
-    if "qtde_integracoes" in df.columns:
-        cnt_int = df["qtde_integracoes"].value_counts().sort_index()
-        axes[1].bar(cnt_int.index.astype(str), cnt_int.values, color="mediumpurple", alpha=0.85)
-        axes[1].set_title("Quantidade de Integrações")
-        axes[1].set_xlabel("Nº de Integrações")
-        axes[1].set_ylabel("Frequência")
+    subsidio_medio = subsidio_sum / subsidio_count
+    print(sentido_cnt)
+    print(sentido_cnt.sum())
+    axes[0].pie(sentido_cnt.values, labels=sentido_cnt.index, autopct="%1.1f%%",
+                startangle=90, colors=sns.color_palette("pastel"))
+    axes[0].set_title("Distribuição por Sentido")
+
+    axes[1].bar(integracoes_cnt.index.astype(str), integracoes_cnt.values, color="mediumpurple", alpha=0.85)
+    axes[1].set_title("Quantidade de Integrações")
+    axes[1].set_xlabel("Nº de Integrações")
+    axes[1].set_ylabel("Frequência")
 
     plt.tight_layout()
     plt.savefig(out / "05_sentido_integracoes.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     # Subsídio médio com e sem integração
-    if "qtde_integracoes" in df.columns and "vl_subsidio" in df.columns:
-        df["tem_integracao"] = (df["qtde_integracoes"] > 0).map({True:"Com integração", False:"Sem integração"})
-        fig, ax = plt.subplots(figsize=(7, 4))
-        sns.barplot(data=df, x="tem_integracao", y="vl_subsidio", estimator=np.mean,
-                    ci=95, palette="Set2", ax=ax)
-        ax.set_title("Subsídio Médio — Com vs Sem Integração")
-        ax.set_xlabel("")
-        ax.set_ylabel("Subsídio Médio (R$)")
-        plt.tight_layout()
-        plt.savefig(out / "05b_subsidio_integracao.png", dpi=150, bbox_inches="tight")
-        plt.close()
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.bar(
+        subsidio_medio.index,
+        subsidio_medio.values
+    )
+    ax.set_title("Subsídio Médio — Com vs Sem Integração")
+    ax.set_xlabel("")
+    ax.set_ylabel("Subsídio Médio (R$)")
+    plt.tight_layout()
+    plt.savefig(out / "05b_subsidio_integracao.png", dpi=150, bbox_inches="tight")
+    plt.close()
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -528,10 +642,27 @@ def secao_sentido_integracoes(df: pd.DataFrame, out: Path):
 def secao_correlacoes(df: pd.DataFrame, out: Path):
     print("[6/7] Correlações")
 
-    num_cols = ["vl_linha","vl_trans","vl_subsidio","pct_subsidio","qtde_integracoes","hora","sentido"]
-    available = [c for c in num_cols if c in df.columns]
-    corr = df[available].corr(numeric_only=True)
+    cols_in_use={
+        "Vl Linha":                "vl_linha",
+        "Vl Trans":                "vl_trans",
+        "Vl Subsídio":             "vl_subsidio",
+        "Sindicato":               "sindicato",
+        "hora":                     "hora",
+        "Sentido":                 "sentido",
+        "pct_subsidio":            "pct_subsidio",
+        "Qtde Integrações":   "qtde_integracoes",
+        "Descrição da Aplicação":  "descricao_aplicacao",
+        "tipo_aplicacao": "tipo_aplicacao"
+    }
+    partes_corr=[]
+    for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
+        with os.scandir(pasta) as files:
+            for file in files:
+                dia = load_data_spec(file.path,cols_in_use,pasta[-2:],";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
+                partes_corr.append(dia)
 
+    corr_df = pd.concat(partes_corr,ignore_index=True)
+    corr = corr_df.corr(numeric_only=True)
     fig, ax = plt.subplots(figsize=FIGSIZE_SQ)
     mask = np.triu(np.ones_like(corr, dtype=bool))
     sns.heatmap(corr, mask=mask, annot=True, fmt=".2f", cmap="coolwarm",
@@ -542,12 +673,12 @@ def secao_correlacoes(df: pd.DataFrame, out: Path):
     plt.close()
 
     # Scatter: vl_linha vs vl_trans colorido por tipo de aplicação
-    if "vl_linha" in df.columns and "vl_trans" in df.columns and "tipo_aplicacao" in df.columns:
+    if "vl_linha" in corr_df.columns and "vl_trans" in corr_df.columns and "tipo_aplicacao" in corr_df.columns:
         fig, ax = plt.subplots(figsize=FIGSIZE_SQ)
-        tipos = df["tipo_aplicacao"].dropna().unique()
+        tipos = corr_df["tipo_aplicacao"].dropna().unique()
         palette = sns.color_palette("tab10", len(tipos))
         for tipo, cor in zip(tipos, palette):
-            sub = df[df["tipo_aplicacao"] == tipo]
+            sub = corr_df[corr_df["tipo_aplicacao"] == tipo]
             ax.scatter(sub["vl_linha"], sub["vl_trans"], label=f"Aplicação {tipo}",
                        alpha=0.5, s=25, color=cor)
         ax.set_xlabel("Vl Linha (tarifa cheia, R$)")
@@ -566,20 +697,34 @@ def secao_correlacoes(df: pd.DataFrame, out: Path):
 def secao_anomalias(df: pd.DataFrame, out: Path):
     print("[7/7] Detecção de Anomalias (Isolation Forest)")
 
+    cols_in_use={
+        "Vl Linha":                "vl_linha",
+        "Vl Trans":                "vl_trans",
+        "Vl Subsídio":             "vl_subsidio",
+        "hora":                     "hora",
+        "pct_subsidio":            "pct_subsidio",
+        "Qtde Integrações":   "qtde_integracoes",
+    }
     feature_cols = ["vl_linha","vl_trans","vl_subsidio","pct_subsidio","qtde_integracoes","hora"]
     available = [c for c in feature_cols if c in df.columns]
+    partes_anom=[]
+    for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
+        with os.scandir(pasta) as files:
+            for file in files:
+                dia = load_data_spec(file.path,cols_in_use,pasta[-2:],";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
+                partes_anom.append(dia)
+    anom_df=pd.concat(partes_anom,ignore_index=True).dropna()
 
-    df_feat = df[available].dropna()
-    if len(df_feat) < 20:
+    if len(anom_df) < 20:
         print("  Dados insuficientes para detecção de anomalias.")
         return
 
     iso = IsolationForest(n_estimators=100, contamination=0.03, random_state=42)
-    labels = iso.fit_predict(df_feat)
-    scores = iso.decision_function(df_feat)
+    labels = iso.fit_predict(anom_df)
+    scores = iso.decision_function(anom_df)
 
-    df.loc[df_feat.index, "anomalia"]    = (labels == -1).astype(int)
-    df.loc[df_feat.index, "anomaly_score"] = scores
+    df.loc[anom_df.index, "anomalia"]    = (labels == -1).astype(int)
+    df.loc[anom_df.index, "anomaly_score"] = scores
 
     n_anom = int(df["anomalia"].sum())
     print(f"  Transações sinalizadas como anômalas: {n_anom} ({n_anom/len(df)*100:.1f}%)")
