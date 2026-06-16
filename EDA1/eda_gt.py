@@ -63,7 +63,8 @@ COLUNAS_GT={
     "Escola":                  "escola",
     "Nº Censo Escola":          "num_escola",
 }
-TIPOS=["agosto\\BE","agosto\\BU","agosto\\GT"]
+PASTA="agosto\\GT"
+TIPO="GT"
 SENTIDO_MAP = {0: "Não informado", 1: "Ida", 2: "Volta"}
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -82,8 +83,6 @@ def parse_brl(series: pd.Series) -> pd.Series:
         .astype(float)
     )
 def pega_dict(tipo: str) -> dict:
-    if tipo=="BE": return COLUNAS_BE
-    if tipo=="BU": return COLUNAS_BU
     if tipo=="GT": return COLUNAS_GT
 
 def load_data(path: str, cols_use:dict, sep: str = ";") -> pd.DataFrame:
@@ -195,25 +194,24 @@ def secao_temporal(df: pd.DataFrame, out: Path):
         "Data do Processamento":   "data_processamento",
         "Nº Cartão": "num_cartao",
     }
-    for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
-        with os.scandir(pasta) as files:
-            for file in files:
-                dia = load_data_spec(file.path,cols_in_use,pasta[-2:],";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
-                if "hora" in dia.columns:
-                    cnt = dia["hora"].value_counts()
-                    hora_cnt = hora_cnt.add(cnt, fill_value=0)
+    with os.scandir(PASTA) as files:
+        for file in files:
+            dia = load_data_spec(file.path,cols_in_use,TIPO,";") #PASTA [-2:] indica do tipo da entrada,definida no diretorio
+            if "hora" in dia.columns:
+                cnt = dia["hora"].value_counts()
+                hora_cnt = hora_cnt.add(cnt, fill_value=0)
 
-                if "dia_semana" in dia.columns:
-                    ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
-                    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
-                    map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
-                    cnt=dia["dia_semana"].map(map_dias).value_counts().reindex(nomes_pt)
-                    dia_semana_cnt=dia_semana_cnt.add(cnt,fill_value=0)
+            if "dia_semana" in dia.columns:
+                ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+                nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+                map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
+                cnt=dia["dia_semana"].map(map_dias).value_counts().reindex(nomes_pt)
+                dia_semana_cnt=dia_semana_cnt.add(cnt,fill_value=0)
 
-                if all(c in dia.columns for c in ["data_transacao", "data_processamento"]): #idem
-                    lat = (dia["data_processamento"]- dia["data_transacao"]).dt.total_seconds() / 3600
-                    lat = lat[lat >= 0]
-                    all_latencies.append(lat)
+            if all(c in dia.columns for c in ["data_transacao", "data_processamento"]): #idem
+                lat = (dia["data_processamento"]- dia["data_transacao"]).dt.total_seconds() / 3600
+                lat = lat[lat >= 0]
+                all_latencies.append(lat)
     hora_cnt = hora_cnt.sort_index()
 
     # Transações por hora do dia
@@ -251,7 +249,7 @@ def secao_temporal(df: pd.DataFrame, out: Path):
     ax1.set_xlabel("Data")
     ax1.set_ylabel("Nº Transações")
     ax1.tick_params(axis="x", rotation=45)
-    plt.title("Série Diária — Transações e Subsídio")
+    plt.title("Série Diária — Transações")
     fig.legend(loc="upper left", bbox_to_anchor=(0.1, 0.95))
     plt.tight_layout()
     plt.savefig(out / "03c_serie_diaria.png", dpi=150, bbox_inches="tight")
@@ -302,22 +300,21 @@ def secao_entidades(df: pd.DataFrame, out: Path):
 
     cartoes_unicos = defaultdict(set)#tudo isso aqui para fazer media depois no final
 
-    for pasta in TIPOS:
-        with os.scandir(pasta) as files:
-            for file in files:
-                dia = load_data_spec(file.path,cols_in_use,pasta[-2:], ";") #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
-                if "operadora" in dia.columns: #transacoes por operadora 
-                    cnt = dia["operadora"].value_counts()
-                    operadora_cnt = operadora_cnt.add(cnt, fill_value=0)
-                if all(c in dia.columns for c in ["linha","num_cartao"]): #se dia tem todas essas colunas
-                    cnt = dia["linha"].value_counts()
-                    linha_cnt = linha_cnt.add(cnt, fill_value=0) #contando transacoes por linha 
-                    for linha, grp in dia.groupby("linha"):
-                        transacoes[linha] += len(grp)
-                        cartoes_unicos[linha].update(grp["num_cartao"].dropna()) #construcao de resumo por linha
-                if "sindicato" in dia.columns: #transacoes por sindicato
-                    cnt = dia["sindicato"].value_counts()
-                    sindicato_cnt = sindicato_cnt.add(cnt, fill_value=0)
+    with os.scandir(PASTA) as files:
+        for file in files:
+            dia = load_data_spec(file.path,cols_in_use,TIPO, ";") #pegar tipo de arquivo como ultimos 2 chars da PASTA(PASTA ta agosto/BU agosto/BE etc)
+            if "operadora" in dia.columns: #transacoes por operadora 
+                cnt = dia["operadora"].value_counts()
+                operadora_cnt = operadora_cnt.add(cnt, fill_value=0)
+            if all(c in dia.columns for c in ["linha","num_cartao"]): #se dia tem todas essas colunas
+                cnt = dia["linha"].value_counts()
+                linha_cnt = linha_cnt.add(cnt, fill_value=0) #contando transacoes por linha 
+                for linha, grp in dia.groupby("linha"):
+                    transacoes[linha] += len(grp)
+                    cartoes_unicos[linha].update(grp["num_cartao"].dropna()) #construcao de resumo por linha
+            if "sindicato" in dia.columns: #transacoes por sindicato
+                cnt = dia["sindicato"].value_counts()
+                sindicato_cnt = sindicato_cnt.add(cnt, fill_value=0)
 
     valores = { #manter num dict p economizar ficar mais legivel
     "operadora": operadora_cnt,
@@ -368,11 +365,10 @@ def secao_correlacoes(df: pd.DataFrame, out: Path):
         "tipo_aplicacao": "tipo_aplicacao"
     }
     partes_corr=[]
-    for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
-        with os.scandir(pasta) as files:
-            for file in files:
-                dia = load_data_spec(file.path,cols_in_use,pasta[-2:],";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
-                partes_corr.append(dia)
+    with os.scandir(PASTA) as files:
+        for file in files:
+            dia = load_data_spec(file.path,cols_in_use,TIPO,";")
+            partes_corr.append(dia)
 
     corr_df = pd.concat(partes_corr,ignore_index=True)
     corr = corr_df.corr(numeric_only=True)
@@ -405,7 +401,7 @@ def main():
     parser.add_argument("--input",  required=True, help="Caminho do arquivo de dados (.txt/.csv)")
     parser.add_argument("--tipo",required=True, help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
-    parser.add_argument("--output", default="relatorio_eda", help="Pasta de saída")
+    parser.add_argument("--output", default="relatorio_eda", help="PASTA de saída")
     args = parser.parse_args()
 
     out = Path(args.output)
