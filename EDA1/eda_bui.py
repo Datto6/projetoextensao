@@ -58,13 +58,13 @@ COLUNAS_BU = {
     "Nº Carro":                "num_carro",
     "Sentido":                 "sentido",
     # "Nº Validador":            "num_validador", tava dando erro na leitura disso, apenas tirei pois nao usamos
-    "Data da Transação":       "data_transacao",
-    "Data do Processamento":   "data_processamento",
+    "Data da Transação":       "data_transacao", #dayfirst=True
+    "Data do Processamento":   "data_processamento", #dayfirst=true
     "Vl Linha":                "vl_linha",
     "Vl Trans":                "vl_trans",
     "Vl Subsídio":             "vl_subsidio",
     "Qtde Integrações":        "qtde_integracoes",
-    "Data da Ordem":           "data_ordem",
+    "Data da Ordem":           "data_ordem", #dayfirst=False
     "Nº Ordem":                "num_ordem",
 }
 COLUNAS_BE={
@@ -76,8 +76,8 @@ COLUNAS_BE={
     "Nº Carro":                "num_carro",
     "Sentido":                 "sentido",
     # "Nº Validador":            "num_validador",  tava dando erro na leitura disso, apenas tirei pois nao usamos
-    "Data da Transação":       "data_transacao",
-    "Data do Processamento":   "data_processamento",
+    "Data da Transação":       "data_transacao", #dayfirst=true
+    "Data do Processamento":   "data_processamento", #dayfirst=true
     "Vl Linha":                "vl_linha",
     "Vl Trans":                "vl_trans",
     "Vl Subsídio":             "vl_subsidio",
@@ -90,8 +90,8 @@ COLUNAS_GT={
     "Linha":                   "linha",
     "Nº Carro":                "num_carro",
     "Nº Validador":            "num_validador",
-    "Data da Transação":       "data_transacao",
-    "Data do Processamento":   "data_processamento",
+    "Data da Transação":       "data_transacao",  #dayfirst=False
+    "Data do Processamento":   "data_processamento", #dayfirst=False
     "Transações":               "transacoes", 
     "Escola":                  "escola",
     "Nº Censo Escola":          "num_escola",
@@ -119,7 +119,7 @@ def pega_dict(tipo: str) -> dict:
     if tipo=="BU": return COLUNAS_BU
     if tipo=="GT": return COLUNAS_GT
 
-def load_data(path: str, cols_use:dict, sep: str = ";") -> pd.DataFrame:
+def load_data(path: str, cols_use:dict,tipo:str, sep: str = ";") -> pd.DataFrame:
     print(f"\n{'─'*60}")
     print(f"  Carregando: {path}")
     print(f"{'─'*60}")
@@ -130,9 +130,17 @@ def load_data(path: str, cols_use:dict, sep: str = ";") -> pd.DataFrame:
     df.rename(columns=cols_use, inplace=True)
 
     # Datas
-    for col in ["data_transacao", "data_processamento", "data_ordem"]:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+    if tipo=="GT":
+        for col in ["data_transacao", "data_processamento", "data_ordem"]:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+    if tipo=="BE" or tipo=="BU":
+        for col in ["data_transacao", "data_processamento"]:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+        if "data_ordem" in df.columns:
+            df["data_ordem"]=pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+
 
     # Monetários
     for col in ["vl_linha", "vl_trans", "vl_subsidio"]:
@@ -174,7 +182,7 @@ def load_data_spec(path: str, cols_use:dict, tipo:str,sep: str=";"):
     }
 
     if available_cols:
-        return load_data(path, available_cols, sep) #passar elas pro load_data
+        return load_data(path, available_cols,tipo, sep) #passar elas pro load_data
 
     return pd.DataFrame() 
 # ════════════════════════════════════════════════════════════════════════════
@@ -222,7 +230,7 @@ def secao_visao_geral(df: pd.DataFrame, out: Path):
 # 3. DISTRIBUIÇÕES DE VALORES
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_valores(df: pd.DataFrame, out: Path):
+def secao_valores(out: Path):
     print("[2/7] Distribuições de Valores")
 
     fig, axes = plt.subplots(1, 3, figsize=FIGSIZE_WIDE)
@@ -312,7 +320,7 @@ def secao_valores(df: pd.DataFrame, out: Path):
 # 4. ANÁLISE TEMPORAL
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_temporal(df: pd.DataFrame, out: Path):
+def secao_temporal(out: Path):
     print("[3/7] Análise Temporal")
     hora_cnt = pd.Series(dtype=np.int64)
     hora_sub_sum = pd.Series(dtype=np.float64)
@@ -447,7 +455,7 @@ def top_bar(series: pd.Series, title: str, xlabel: str, ax, n=15, color="steelbl
     ax.set_xlabel(xlabel)
 
 
-def secao_entidades(df: pd.DataFrame, out: Path):
+def secao_entidades( out: Path):
     print("[4/7] Análise por Entidade")
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 7))
@@ -578,7 +586,7 @@ def secao_entidades(df: pd.DataFrame, out: Path):
 # 6. ANÁLISE DE SENTIDO E INTEGRAÇÕES
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_sentido_integracoes(df: pd.DataFrame, out: Path):
+def secao_sentido_integracoes(out: Path):
     print("[5/7] Sentido e Integrações")
 
     fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
@@ -649,27 +657,10 @@ def secao_sentido_integracoes(df: pd.DataFrame, out: Path):
 def secao_correlacoes(df: pd.DataFrame, out: Path):
     print("[6/7] Correlações")
 
-    cols_in_use={
-        "Vl Linha":                "vl_linha",
-        "Vl Trans":                "vl_trans",
-        "Vl Subsídio":             "vl_subsidio",
-        "Sindicato":               "sindicato",
-        "hora":                     "hora",
-        "Sentido":                 "sentido",
-        "pct_subsidio":            "pct_subsidio",
-        "Qtde Integrações":   "qtde_integracoes",
-        "Descrição da Aplicação":  "descricao_aplicacao",
-        "tipo_aplicacao": "tipo_aplicacao"
-    }
-    partes_corr=[]
-    for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
-        with os.scandir(pasta) as files:
-            for file in files:
-                dia = load_data_spec(file.path,cols_in_use,pasta[-2:],";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
-                partes_corr.append(dia)
+    num_cols = ["vl_linha","vl_trans","vl_subsidio","pct_subsidio","qtde_integracoes","hora","sentido"]
+    available = [c for c in num_cols if c in df.columns]
+    corr = df[available].corr(numeric_only=True)
 
-    corr_df = pd.concat(partes_corr,ignore_index=True)
-    corr = corr_df.corr(numeric_only=True)
     fig, ax = plt.subplots(figsize=FIGSIZE_SQ)
     mask = np.triu(np.ones_like(corr, dtype=bool))
     sns.heatmap(corr, mask=mask, annot=True, fmt=".2f", cmap="coolwarm",
@@ -680,12 +671,12 @@ def secao_correlacoes(df: pd.DataFrame, out: Path):
     plt.close()
 
     # Scatter: vl_linha vs vl_trans colorido por tipo de aplicação
-    if "vl_linha" in corr_df.columns and "vl_trans" in corr_df.columns and "tipo_aplicacao" in corr_df.columns:
+    if "vl_linha" in df.columns and "vl_trans" in df.columns and "tipo_aplicacao" in df.columns:
         fig, ax = plt.subplots(figsize=FIGSIZE_SQ)
-        tipos = corr_df["tipo_aplicacao"].dropna().unique()
+        tipos = df["tipo_aplicacao"].dropna().unique()
         palette = sns.color_palette("tab10", len(tipos))
         for tipo, cor in zip(tipos, palette):
-            sub = corr_df[corr_df["tipo_aplicacao"] == tipo]
+            sub = df[df["tipo_aplicacao"] == tipo]
             ax.scatter(sub["vl_linha"], sub["vl_trans"], label=f"Aplicação {tipo}",
                        alpha=0.5, s=25, color=cor)
         ax.set_xlabel("Vl Linha (tarifa cheia, R$)")
@@ -704,59 +695,41 @@ def secao_correlacoes(df: pd.DataFrame, out: Path):
 def secao_anomalias(df: pd.DataFrame, out: Path):
     print("[7/7] Detecção de Anomalias (Isolation Forest)")
 
-    cols_in_use={
-        "Vl Linha":                "vl_linha",
-        "Vl Trans":                "vl_trans",
-        "Vl Subsídio":             "vl_subsidio",
-        "hora":                     "hora",
-        "pct_subsidio":            "pct_subsidio",
-        "Qtde Integrações":   "qtde_integracoes",
-    }
     feature_cols = ["vl_linha","vl_trans","vl_subsidio","pct_subsidio","qtde_integracoes","hora"]
     available = [c for c in feature_cols if c in df.columns]
-    partes_anom=[]
-    for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
-        with os.scandir(pasta) as files:
-            for file in files:
-                dia = load_data_spec(file.path,cols_in_use,pasta[-2:],";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
-                partes_anom.append(dia)
-    anom_df=pd.concat(partes_anom,ignore_index=True).dropna()
 
-    if len(anom_df) < 20:
+    df_feat = df[available].dropna()
+    if len(df_feat) < 20:
         print("  Dados insuficientes para detecção de anomalias.")
         return
 
     iso = IsolationForest(n_estimators=100, contamination=0.03, random_state=42)
-    labels = iso.fit_predict(anom_df)
-    scores = iso.decision_function(anom_df)
+    labels = iso.fit_predict(df_feat)
+    scores = iso.decision_function(df_feat)
 
-    df.loc[anom_df.index, "anomalia"]    = (labels == -1).astype(int)
-    df.loc[anom_df.index, "anomaly_score"] = scores
+    df.loc[df_feat.index, "anomalia"]    = (labels == -1).astype(int)
+    df.loc[df_feat.index, "anomaly_score"] = scores
 
     n_anom = int(df["anomalia"].sum())
     print(f"  Transações sinalizadas como anômalas: {n_anom} ({n_anom/len(df)*100:.1f}%)")
 
-    # Scatter anomalias em vl_linha vs vl_subsidio
-    if "vl_linha" in df.columns and "vl_subsidio" in df.columns:
-        fig, ax = plt.subplots(figsize=FIGSIZE_SQ)
-        normal = df[df["anomalia"] == 0]
-        anoms  = df[df["anomalia"] == 1]
-        ax.scatter(normal["vl_linha"], normal["vl_subsidio"],
-                   alpha=0.4, s=20, color="steelblue", label="Normal")
-        ax.scatter(anoms["vl_linha"],  anoms["vl_subsidio"],
-                   alpha=0.9, s=60, color="red", marker="X", label=f"Anômalo (n={n_anom})")
-        ax.set_xlabel("Vl Linha (R$)")
-        ax.set_ylabel("Vl Subsídio (R$)")
-        ax.set_title("Detecção de Anomalias — Isolation Forest")
-        ax.legend()
-        plt.tight_layout()
-        plt.savefig(out / "07_anomalias_isolation_forest.png", dpi=150, bbox_inches="tight")
-        plt.close()
-
     # Exportar anomalias para revisão
     anom_df = df[df["anomalia"] == 1].copy()
-    anom_df.to_csv(out / "07_transacoes_anomalas.csv", index=False)
+    arquivo=Path(out/"07_transacoes_anomalas.csv")
+    if arquivo.is_file():
+        anom_df.to_csv(out / "07_transacoes_anomalas.csv",mode="a",header=False, index=False)
+    else:
+        anom_df.to_csv(out / "07_transacoes_anomalas.csv",mode="a",header=True, index=False)
     print(f"  Transações anômalas exportadas em: 07_transacoes_anomalas.csv")
+
+def anomalias_aux(out:Path):
+    #faz anomalias para cada arquivo individualmente, depois exporta pra csv compartilhado
+    with os.scandir("agosto\\BU") as files:
+        for file in files:
+            cols_in_use=pega_dict("BU")
+            dia = load_data_spec(file.path,cols_in_use,"BU", ";") 
+            secao_anomalias(dia,out)
+
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -771,7 +744,7 @@ def main():
     parser.add_argument("--input",  required=True, help="Caminho do arquivo de dados (.txt/.csv)")
     parser.add_argument("--tipo",required=True, help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
-    parser.add_argument("--output", default="relatorio_eda", help="Pasta de saída")
+    parser.add_argument("--output", default="relatorio_eda_BUI", help="Pasta de saída")
     args = parser.parse_args()
 
     out = Path(args.output)
@@ -780,12 +753,12 @@ def main():
     df = load_data_spec(args.input, cols_use=cols_use,tipo=args.tipo,sep=args.sep)
 
     secao_visao_geral(df, out)
-    secao_valores(df, out)
-    secao_temporal(df, out)
-    secao_entidades(df, out)
-    secao_sentido_integracoes(df, out)
+    secao_valores(out)
+    secao_temporal(out)
+    secao_entidades(out)
+    secao_sentido_integracoes(out)
     secao_correlacoes(df, out)
-    secao_anomalias(df, out)
+    anomalias_aux(out)
 
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")

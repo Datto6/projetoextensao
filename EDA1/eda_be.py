@@ -87,7 +87,7 @@ def parse_brl(series: pd.Series) -> pd.Series:
 def pega_dict(tipo: str) -> dict:
     if tipo=="BE": return COLUNAS_BE
 
-def load_data(path: str, cols_use:dict, sep: str = ";") -> pd.DataFrame:
+def load_data(path: str, cols_use:dict, tipo:str, sep: str = ";") -> pd.DataFrame:
     print(f"\n{'─'*60}")
     print(f"  Carregando: {path}")
     print(f"{'─'*60}")
@@ -98,9 +98,17 @@ def load_data(path: str, cols_use:dict, sep: str = ";") -> pd.DataFrame:
     df.rename(columns=cols_use, inplace=True)
 
     # Datas
-    for col in ["data_transacao", "data_processamento", "data_ordem"]:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+    if tipo=="GT":
+        for col in ["data_transacao", "data_processamento", "data_ordem"]:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+    if tipo=="BE" or tipo=="BU":
+        for col in ["data_transacao", "data_processamento"]:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+        if "data_ordem" in df.columns:
+            df["data_ordem"]=pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+
 
     # Monetários
     for col in ["vl_linha", "vl_trans", "vl_subsidio"]:
@@ -142,7 +150,7 @@ def load_data_spec(path: str, cols_use:dict, tipo:str,sep: str=";"):
     }
 
     if available_cols:
-        return load_data(path, available_cols, sep) #passar elas pro load_data
+        return load_data(path, available_cols, tipo, sep) #passar elas pro load_data
 
     return pd.DataFrame() 
 # ════════════════════════════════════════════════════════════════════════════
@@ -253,7 +261,7 @@ def secao_valores(out: Path):
     plt.close()
 
     # Boxplots por tipo de aplicação --> Retirado porque nao consigo interpretar muito sentido
-
+    #Distribuicao de porcentagem de subsidio
     fig, ax = plt.subplots(figsize=(8, 4))
     serie = pct_subsidio_cnt.sort_index()
 
@@ -624,9 +632,9 @@ def main():
         description="EDA — Bilhete Único Intermunicipal (BUI)"
     )
     parser.add_argument("--input",  required=True, help="Caminho do arquivo de dados (.txt/.csv) ")
-    parser.add_argument("--tipo",required=True, help="Tipo do arquivo(GT,BU OU BE)")
+    parser.add_argument("--tipo",deafult="BE", help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
-    parser.add_argument("--output", default="relatorio_eda", help="Pasta de saída")
+    parser.add_argument("--output", default="relatorio_eda_BE", help="Pasta de saída")
     args = parser.parse_args()
 
     out = Path(args.output)

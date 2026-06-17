@@ -85,7 +85,7 @@ def parse_brl(series: pd.Series) -> pd.Series:
 def pega_dict(tipo: str) -> dict:
     if tipo=="GT": return COLUNAS_GT
 
-def load_data(path: str, cols_use:dict, sep: str = ";") -> pd.DataFrame:
+def load_data(path: str, cols_use:dict,tipo:str, sep: str = ";",) -> pd.DataFrame:
     print(f"\n{'─'*60}")
     print(f"  Carregando: {path}")
     print(f"{'─'*60}")
@@ -96,9 +96,16 @@ def load_data(path: str, cols_use:dict, sep: str = ";") -> pd.DataFrame:
     df.rename(columns=cols_use, inplace=True)
 
     # Datas
-    for col in ["data_transacao", "data_processamento", "data_ordem"]:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+    if tipo=="GT":
+        for col in ["data_transacao", "data_processamento", "data_ordem"]:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+    if tipo=="BE" or tipo=="BU":
+        for col in ["data_transacao", "data_processamento"]:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+        if "data_ordem" in df.columns:
+            df["data_ordem"]=pd.to_datetime(df[col], dayfirst=False, errors="coerce")
 
     # Monetários
     for col in ["vl_linha", "vl_trans", "vl_subsidio"]:
@@ -140,7 +147,7 @@ def load_data_spec(path: str, cols_use:dict, tipo:str,sep: str=";"):
     }
 
     if available_cols:
-        return load_data(path, available_cols, sep) #passar elas pro load_data
+        return load_data(path, available_cols,tipo, sep,) #passar elas pro load_data
 
     return pd.DataFrame() 
 # ════════════════════════════════════════════════════════════════════════════
@@ -290,6 +297,7 @@ def secao_entidades(out: Path):
         "Sindicato":               "sindicato",
         "Nº Cartão": "num_cartao",
         "Descrição da Aplicação":  "descricao_aplicacao",
+        "Data da Transação":       "data_transacao",
     }
     operadora_cnt = pd.Series(dtype=np.int64)
     linha_cnt = pd.Series(dtype=np.int64)
@@ -389,7 +397,6 @@ def secao_correlacoes(df: pd.DataFrame, out: Path):
     plt.savefig(out / "06_mapa_correlacoes.png", dpi=150, bbox_inches="tight")
     plt.close()
 
-    # num de transacoes por tipo de aplicacao aqui?!
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -409,7 +416,7 @@ def main():
     parser.add_argument("--input", default="TRANSACAO_BE_PUBLICO_2025_08_17.csv",help="Caminho do arquivo de dados (.txt/.csv)")
     parser.add_argument("--tipo",default="GT", help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
-    parser.add_argument("--output", default="relatorio_eda_gt2", help="PASTA de saída")
+    parser.add_argument("--output", default="relatorio_eda_gt3", help="PASTA de saída")
     args = parser.parse_args()
 
     out = Path(args.output)
