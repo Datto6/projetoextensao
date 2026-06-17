@@ -57,7 +57,7 @@ COLUNAS_BU = {
     "Linha":                   "linha",
     "Nº Carro":                "num_carro",
     "Sentido":                 "sentido",
-    # "Nº Validador":            "num_validador", tava dando erro na leitura disso, apenas tirei pois nao usamos
+    # "Nº Validador":            "num_validador", #tava dando erro na leitura disso, apenas tirei pois nao usamos
     "Data da Transação":       "data_transacao", #dayfirst=True
     "Data do Processamento":   "data_processamento", #dayfirst=true
     "Vl Linha":                "vl_linha",
@@ -75,7 +75,7 @@ COLUNAS_BE={
     "Linha":                   "linha",
     "Nº Carro":                "num_carro",
     "Sentido":                 "sentido",
-    # "Nº Validador":            "num_validador",  tava dando erro na leitura disso, apenas tirei pois nao usamos
+    # "\"text(\"\"Nº Validador\"\")\"":            "num_validador", # tava dando erro na leitura disso, apenas tirei pois nao usamos
     "Data da Transação":       "data_transacao", #dayfirst=true
     "Data do Processamento":   "data_processamento", #dayfirst=true
     "Vl Linha":                "vl_linha",
@@ -468,14 +468,17 @@ def secao_entidades( out: Path):
         "Sindicato":               "sindicato",
         "pct_subsidio":            "pct_subsidio",
         "Nº Cartão": "num_cartao",
+        "Nº Carro":                "num_carro",
+        "Data da Transação":       "data_transacao",
     }
     operadora_cnt = pd.Series(dtype=np.int64)
     linha_cnt = pd.Series(dtype=np.int64)
     sindicato_cnt = pd.Series(dtype=np.int64)
     subsidio_operadora = pd.Series(dtype=float) #definindo series especificas para usar para o mes todo
-    dia_semana_cnt=pd.Series(dtype=np.int64) 
+
+    dia_semana_cnt=pd.Series(dtype=np.int64)#atributos para fazer resumo por linha
     dia_semana_por_linha = defaultdict(lambda: defaultdict(int)) #dicionario com dicionario dentro
-    
+
     transacoes = defaultdict(int)
 
     vl_linha_sum = defaultdict(float)
@@ -487,10 +490,10 @@ def secao_entidades( out: Path):
     subsidio_total = defaultdict(float)
 
     pct_sum = defaultdict(float)
-    pct_count = defaultdict(int)
+    pct_count = defaultdict(int)#sum e count para fazer medias depois
 
-    cartoes_unicos = defaultdict(set)#tudo isso aqui para fazer media depois no final
-
+    cartoes_unicos = defaultdict(set)
+    carros_unicos=defaultdict(set)
     for pasta in TIPOS:
         with os.scandir(pasta) as files:
             for file in files:
@@ -501,7 +504,7 @@ def secao_entidades( out: Path):
                 if "vl_subsidio" in dia.columns and "operadora" in dia.columns: #contando subsidio por operadora 
                     sub = dia.groupby("operadora")["vl_subsidio"].sum()
                     subsidio_operadora = subsidio_operadora.add(sub, fill_value=0)
-                if all(c in dia.columns for c in ["linha", "vl_linha","vl_trans","pct_subsidio","num_cartao"]): #se dia tem todas essas colunas
+                if all(c in dia.columns for c in ["linha", "vl_linha","vl_trans","pct_subsidio","num_cartao","dia_semana"]): #se dia tem todas essas colunas
                     cnt = dia["linha"].value_counts()
                     linha_cnt = linha_cnt.add(cnt, fill_value=0) #contando transacoes por linha 
                     for linha, grp in dia.groupby("linha"):#construcao de resumo por linha
@@ -518,7 +521,9 @@ def secao_entidades( out: Path):
                         pct_sum[linha] += grp["pct_subsidio"].sum()
                         pct_count[linha] += grp["pct_subsidio"].notna().sum()
 
-                        cartoes_unicos[linha].update(grp["num_cartao"].dropna()) #mantem unicos porque cartoes_unicos eh um set, que descarta duplicados,apenas adiciona novos
+                        cartoes_unicos[linha].update(grp["num_cartao"].dropna()) 
+                        carros_unicos[linha].update(grp["num_carro"].dropna()) #mantem unicos porque set descarta duplicados
+
                         ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
                         nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
                         map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
@@ -563,6 +568,7 @@ def secao_entidades( out: Path):
         "transacoes": [transacoes[l] for l in linhas],
         "linha": list(linhas),
         "cartoes_unicos": [len(cartoes_unicos[l]) for l in linhas],
+        "carros_unicos":[len(carros_unicos[l])for l in linhas],
         "vl_linha_medio": [
             vl_linha_sum[l] / vl_linha_count[l]
             if vl_linha_count[l] else np.nan
@@ -757,7 +763,7 @@ def main():
     parser.add_argument("--input",  required=True, help="Caminho do arquivo de dados (.txt/.csv)")
     parser.add_argument("--tipo",required=True, help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
-    parser.add_argument("--output", default="relatorio_eda_BUI", help="Pasta de saída")
+    parser.add_argument("--output", default="relatorio_eda_BUI2", help="Pasta de saída")
     args = parser.parse_args()
 
     out = Path(args.output)
@@ -765,13 +771,13 @@ def main():
     cols_use=pega_dict(args.tipo)
     df = load_data_spec(args.input, cols_use=cols_use,tipo=args.tipo,sep=args.sep)
 
-    secao_visao_geral(df, out)
-    secao_valores(out)
-    secao_temporal(out)
+    # secao_visao_geral(df, out)
+    # secao_valores(out)
+    # secao_temporal(out)
     secao_entidades(out)
-    secao_sentido_integracoes(out)
-    secao_correlacoes(df, out)
-    anomalias_aux(out)
+    # secao_sentido_integracoes(out)
+    # secao_correlacoes(df, out)
+    # anomalias_aux(out)
 
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")
