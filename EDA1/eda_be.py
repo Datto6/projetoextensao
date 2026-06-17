@@ -311,9 +311,7 @@ def secao_temporal(out: Path):
                 dia_semana_cnt=dia_semana_cnt.add(cnt,fill_value=0)
 
             if all(c in dia.columns for c in ["data_dia", "num_cartao", "vl_subsidio"]): #so entra se dia tem todas essas colunas
-                grp = dia.groupby("data_dia").agg(
-                        transacoes=("num_cartao", "count"),
-                        subsidio_total=("vl_subsidio", "sum"))
+                grp = dia.groupby("data_dia").agg(transacoes=("num_cartao", "count"),subsidio_total=("vl_subsidio", "sum"))
                 for data, row in grp.iterrows():
                     diario_trans[data] = (diario_trans.get(data, 0)+ row["transacoes"])
                     diario_subs[data] = (diario_subs.get(data, 0.0)+ row["subsidio_total"])

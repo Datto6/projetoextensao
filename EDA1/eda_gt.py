@@ -172,17 +172,11 @@ def secao_visao_geral(df: pd.DataFrame, out: Path):
 
     # Estatísticas descritivas numéricas
 
-
 # ════════════════════════════════════════════════════════════════════════════
-# 3. DISTRIBUIÇÕES DE VALORES
-# ════════════════════════════════════════════════════════════════════════════
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# 4. ANÁLISE TEMPORAL
+# 3. ANÁLISE TEMPORAL
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_temporal(df: pd.DataFrame, out: Path):
+def secao_temporal(out: Path):
     print("[3/7] Análise Temporal")
     hora_cnt = pd.Series(dtype=np.int64)
     diario_trans = {}
@@ -207,6 +201,10 @@ def secao_temporal(df: pd.DataFrame, out: Path):
                 map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
                 cnt=dia["dia_semana"].map(map_dias).value_counts().reindex(nomes_pt)
                 dia_semana_cnt=dia_semana_cnt.add(cnt,fill_value=0)
+            if "data_dia" in dia.columns: #so entra se dia tem todas essas colunas
+                grp = dia.groupby("data_dia").agg(transacoes=("data_dia", "size"),)
+                for data, row in grp.iterrows():
+                    diario_trans[data] = (diario_trans.get(data, 0)+ row["transacoes"])
 
             if all(c in dia.columns for c in ["data_transacao", "data_processamento"]): #idem
                 lat = (dia["data_processamento"]- dia["data_transacao"]).dt.total_seconds() / 3600
@@ -271,7 +269,7 @@ def secao_temporal(df: pd.DataFrame, out: Path):
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 5. ANÁLISE POR ENTIDADE (Operadora, Linha, Sindicato)
+# 4. ANÁLISE POR ENTIDADE (Operadora, Linha, Sindicato, Aplicacao)
 # ════════════════════════════════════════════════════════════════════════════
 
 def top_bar(series: pd.Series, title: str, xlabel: str, ax, n=15, color="steelblue"):
@@ -282,7 +280,7 @@ def top_bar(series: pd.Series, title: str, xlabel: str, ax, n=15, color="steelbl
     ax.set_xlabel(xlabel)
 
 
-def secao_entidades(df: pd.DataFrame, out: Path):
+def secao_entidades(out: Path):
     print("[4/7] Análise por Entidade")
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 7))
@@ -291,11 +289,12 @@ def secao_entidades(df: pd.DataFrame, out: Path):
         "Linha":                   "linha",
         "Sindicato":               "sindicato",
         "Nº Cartão": "num_cartao",
+        "Descrição da Aplicação":  "descricao_aplicacao",
     }
     operadora_cnt = pd.Series(dtype=np.int64)
     linha_cnt = pd.Series(dtype=np.int64)
     sindicato_cnt = pd.Series(dtype=np.int64)
-
+    aplicacao_cnt=pd.Series(dtype=np.int64)
     transacoes = defaultdict(int)
 
     cartoes_unicos = defaultdict(set)#tudo isso aqui para fazer media depois no final
@@ -315,11 +314,15 @@ def secao_entidades(df: pd.DataFrame, out: Path):
             if "sindicato" in dia.columns: #transacoes por sindicato
                 cnt = dia["sindicato"].value_counts()
                 sindicato_cnt = sindicato_cnt.add(cnt, fill_value=0)
+            if "tipo_aplicacao" in dia.columns:
+                cnt=dia["tipo_aplicacao"].value_counts()
+                aplicacao_cnt=aplicacao_cnt.add(cnt,fill_value=0)
 
     valores = { #manter num dict p economizar ficar mais legivel
     "operadora": operadora_cnt,
     "linha": linha_cnt,
     "sindicato": sindicato_cnt,
+    "aplicacao":aplicacao_cnt
     }
     for ax, (col, label, cor) in zip(axes, [
         ("operadora", "Operadora", "steelblue"),
@@ -332,9 +335,14 @@ def secao_entidades(df: pd.DataFrame, out: Path):
     plt.tight_layout()
     plt.savefig(out / "04_ranking_entidades.png", dpi=150, bbox_inches="tight")
     plt.close()
-
-    # Subsídio total por operadora
-
+    
+    
+    # Transacoes top 15 aplicacoes
+    fig, ax = plt.subplots(figsize=(10, 6))
+    top_bar(valores["aplicacao"],f"Top 15 — aplicacao (nº transações)","Nº Transações",ax)
+    plt.tight_layout()
+    plt.savefig(out / "04b_transacoes_por_aplicacao.png", dpi=150, bbox_inches="tight")
+    plt.close()
     # Exportar tabela resumo por linha, so que so GT
     linhas = transacoes.keys()
 
@@ -398,21 +406,21 @@ def main():
     parser = argparse.ArgumentParser(
         description="EDA — Bilhete Único Intermunicipal (BUI)"
     )
-    parser.add_argument("--input",  required=True, help="Caminho do arquivo de dados (.txt/.csv)")
-    parser.add_argument("--tipo",required=True, help="Tipo do arquivo(GT,BU OU BE)")
+    parser.add_argument("--input", default="TRANSACAO_BE_PUBLICO_2025_08_17.csv",help="Caminho do arquivo de dados (.txt/.csv)")
+    parser.add_argument("--tipo",default="GT", help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
-    parser.add_argument("--output", default="relatorio_eda", help="PASTA de saída")
+    parser.add_argument("--output", default="relatorio_eda_gt2", help="PASTA de saída")
     args = parser.parse_args()
 
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     cols_use=pega_dict(args.tipo)
-    df = load_data_spec(args.input, cols_use=cols_use,tipo=args.tipo,sep=args.sep)
+    # df = load_data_spec(args.input, cols_use=cols_use,tipo=args.tipo,sep=args.sep)
 
-    secao_visao_geral(df, out)
-    secao_temporal(df, out)
-    secao_entidades(df, out)
-    secao_correlacoes(df, out)
+    # secao_visao_geral(df, out)
+    secao_temporal(out)
+    secao_entidades(out)
+    # secao_correlacoes(df, out)
 
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")
