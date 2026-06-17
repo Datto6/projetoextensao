@@ -350,7 +350,7 @@ def secao_temporal(out: Path):
                     ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
                     nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
                     map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
-                    cnt=dia["dia_semana"].map(map_dias).value_counts().reindex(nomes_pt)
+                    cnt=dia["dia_semana"].map(map_dias).value_counts().reindex(nomes_pt,fill_value=0)
                     dia_semana_cnt=dia_semana_cnt.add(cnt,fill_value=0)
 
                 if all(c in dia.columns for c in ["data_dia", "num_cartao", "vl_subsidio"]): #so entra se dia tem todas essas colunas
@@ -473,7 +473,9 @@ def secao_entidades( out: Path):
     linha_cnt = pd.Series(dtype=np.int64)
     sindicato_cnt = pd.Series(dtype=np.int64)
     subsidio_operadora = pd.Series(dtype=float) #definindo series especificas para usar para o mes todo
-
+    dia_semana_cnt=pd.Series(dtype=np.int64) 
+    dia_semana_por_linha = defaultdict(lambda: defaultdict(int)) #dicionario com dicionario dentro
+    
     transacoes = defaultdict(int)
 
     vl_linha_sum = defaultdict(float)
@@ -502,7 +504,7 @@ def secao_entidades( out: Path):
                 if all(c in dia.columns for c in ["linha", "vl_linha","vl_trans","pct_subsidio","num_cartao"]): #se dia tem todas essas colunas
                     cnt = dia["linha"].value_counts()
                     linha_cnt = linha_cnt.add(cnt, fill_value=0) #contando transacoes por linha 
-                    for linha, grp in dia.groupby("linha"):
+                    for linha, grp in dia.groupby("linha"):#construcao de resumo por linha
                         transacoes[linha] += len(grp)
 
                         vl_linha_sum[linha] += grp["vl_linha"].sum()
@@ -516,8 +518,14 @@ def secao_entidades( out: Path):
                         pct_sum[linha] += grp["pct_subsidio"].sum()
                         pct_count[linha] += grp["pct_subsidio"].notna().sum()
 
-                        cartoes_unicos[linha].update(grp["num_cartao"].dropna()) #construcao de resumo por linha
-
+                        cartoes_unicos[linha].update(grp["num_cartao"].dropna()) #mantem unicos porque cartoes_unicos eh um set, que descarta duplicados,apenas adiciona novos
+                        ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+                        nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+                        map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
+                        cnt=grp["dia_semana"].map(map_dias).value_counts().reindex(nomes_pt,fill_value=0) #quantas transacoes por dia de semana
+                        dia_semana_cnt=dia_semana_cnt.add(cnt,fill_value=0)
+                        for dia_sem, n in cnt.items():
+                            dia_semana_por_linha[linha][dia_sem] += n
                 if "sindicato" in dia.columns: #transacoes por sindicato
                     cnt = dia["sindicato"].value_counts()
                     sindicato_cnt = sindicato_cnt.add(cnt, fill_value=0)
@@ -575,6 +583,11 @@ def secao_entidades( out: Path):
             for l in linhas
         ]
     })
+    for dia in ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]:
+        resumo_linha[dia] = [
+            dia_semana_por_linha[l].get(dia, 0)
+            for l in linhas
+        ] #atualiza transacoes por dia de semana para cada linha
     resumo_linha = (resumo_linha.sort_values("transacoes", ascending=False).round(2))
     print(resumo_linha.columns.tolist())     
     resumo_linha.to_csv(out / "04c_resumo_por_linha.csv",index=False)
