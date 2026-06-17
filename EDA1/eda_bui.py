@@ -233,6 +233,8 @@ def secao_valores(df: pd.DataFrame, out: Path):
     vl_linha_cnt=pd.Series(dtype=np.int64)
     vl_trans_cnt=pd.Series(dtype=np.int64)
     vl_subsidio_cnt=pd.Series(dtype=np.int64)
+    pct_subsidio_cnt=pd.Series(dtype=np.int64)
+
     cols_in_use={
         "Vl Linha":                "vl_linha",
         "Vl Trans":                "vl_trans",
@@ -253,6 +255,9 @@ def secao_valores(df: pd.DataFrame, out: Path):
                 if "vl_subsidio" in dia.columns:
                     cnt = dia["vl_subsidio"].value_counts()
                     vl_subsidio_cnt = vl_subsidio_cnt.add(cnt, fill_value=0)
+                if "pct_subsidio" in dia.columns:
+                    cnt = dia["pct_subsidio"].dropna().clip(0, 100).value_counts()
+                    pct_subsidio_cnt=pct_subsidio_cnt.add(cnt,fill_value=0)
     valores = { #manter num dict p economizar ficar mais legivel
     "vl_linha": vl_linha_cnt,
     "vl_trans": vl_trans_cnt,
@@ -281,28 +286,26 @@ def secao_valores(df: pd.DataFrame, out: Path):
     plt.savefig(out / "02_distribuicao_valores.png", dpi=150, bbox_inches="tight")
     plt.close()
 
-    # Boxplots por tipo de aplicação
-    if "tipo_aplicacao" in df.columns and "vl_subsidio" in df.columns:
-        fig, ax = plt.subplots(figsize=FIGSIZE_WIDE)
-        ordem = df.groupby("tipo_aplicacao")["vl_subsidio"].median().sort_values(ascending=False).index
-        sns.boxplot(data=df, x="tipo_aplicacao", y="vl_subsidio", order=ordem, ax=ax, palette="pastel")
-        ax.set_title("Distribuição do Subsídio por Tipo de Aplicação")
-        ax.set_xlabel("Tipo de Aplicação")
-        ax.set_ylabel("Vl Subsídio (R$)")
-        plt.tight_layout()
-        plt.savefig(out / "02b_subsidio_por_aplicacao_boxplot.png", dpi=150, bbox_inches="tight")
-        plt.close()
+    # Boxplots por tipo de aplicação--> retirei, pois nao fazia muito sentido/ilegivel
 
     # Percentual de subsídio
-    if "pct_subsidio" in df.columns:
-        fig, ax = plt.subplots(figsize=(8, 4))
-        sns.histplot(df["pct_subsidio"].dropna().clip(0, 100), bins=40, kde=False, ax=ax, color="coral")
-        ax.set_title("Distribuição do Percentual de Subsídio (% do Vl Linha)")
-        ax.set_xlabel("% Subsídio")
-        ax.set_ylabel("Frequência")
-        plt.tight_layout()
-        plt.savefig(out / "02c_pct_subsidio.png", dpi=150, bbox_inches="tight")
-        plt.close()
+    fig, ax = plt.subplots(figsize=(8, 4))
+    serie = pct_subsidio_cnt.sort_index()
+
+    bins = np.arange(0, 102.5, 2.5)
+
+    bin_ids = pd.cut(serie.index.astype(float),bins=bins,include_lowest=True) #determina ids de bins
+    hist = serie.groupby(bin_ids).sum() #soma as frequencias dentro de cada bin 
+    centers = [(interval.left + interval.right) / 2
+        for interval in hist.index]
+
+    ax.bar(centers, hist.values, width=2.5)
+    ax.set_title("Distribuição do Percentual de Subsídio (% do Vl Linha)")
+    ax.set_xlabel("% Subsídio")
+    ax.set_ylabel("Frequência")
+    plt.tight_layout()
+    plt.savefig(out / "02c_pct_subsidio.png", dpi=150, bbox_inches="tight")
+    plt.close()
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -312,6 +315,7 @@ def secao_valores(df: pd.DataFrame, out: Path):
 def secao_temporal(df: pd.DataFrame, out: Path):
     print("[3/7] Análise Temporal")
     hora_cnt = pd.Series(dtype=np.int64)
+    hora_sub_sum = pd.Series(dtype=np.float64)
     diario_trans = {}
     diario_subs = {}
     all_latencies = []
@@ -328,11 +332,13 @@ def secao_temporal(df: pd.DataFrame, out: Path):
         with os.scandir(pasta) as files:
             for file in files:
                 dia = load_data_spec(file.path,cols_in_use,pasta[-2:],";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
-                if "hora" in dia.columns:
+                if "hora" in dia.columns: #agregando transacoes por hora 
                     cnt = dia["hora"].value_counts()
                     hora_cnt = hora_cnt.add(cnt, fill_value=0)
-
-                if "dia_semana" in dia.columns:
+                    if "vl_subsidio" in dia.columns: #agregando subsidio por hora
+                        sub_sum = dia.groupby("hora")["vl_subsidio"].sum()
+                        hora_sub_sum = hora_sub_sum.add(sub_sum, fill_value=0) #cada hora tem sua soma de subsidio aqui
+                if "dia_semana" in dia.columns: #agregando transacoes por dia de semana
                     ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
                     nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
                     map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
@@ -350,9 +356,12 @@ def secao_temporal(df: pd.DataFrame, out: Path):
                 if all(c in dia.columns for c in ["data_transacao", "data_processamento"]): #idem
                     lat = (dia["data_processamento"]- dia["data_transacao"]).dt.total_seconds() / 3600
                     lat = lat[lat >= 0]
-                    all_latencies.append(lat)
-    hora_cnt = hora_cnt.sort_index()
+                    all_latencies.append(lat) #agregando latencias 
 
+    hora_cnt = hora_cnt.sort_index()#quantas transacoes por hora
+
+    hora_sub_sum = hora_sub_sum.sort_index()
+    hora_sub_media = hora_sub_sum / hora_cnt #calculando medias de subsidio por hora com total agregado 
     # Transações por hora do dia
     fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
     axes[0].bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
@@ -362,13 +371,11 @@ def secao_temporal(df: pd.DataFrame, out: Path):
     axes[0].set_xticks(range(0, 24))
 
     # Subsídio médio por hora
-    if "vl_subsidio" in df.columns:
-        hora_sub = df.groupby("hora")["vl_subsidio"].mean()
-        axes[1].plot(hora_sub.index, hora_sub.values, marker="o", color="coral")
-        axes[1].set_title("Subsídio Médio por Hora do Dia")
-        axes[1].set_xlabel("Hora")
-        axes[1].set_ylabel("Subsídio Médio (R$)")
-        axes[1].set_xticks(range(0, 24))
+    axes[1].plot(hora_sub_media.index, hora_sub_media.values, marker="o", color="coral")
+    axes[1].set_title("Subsídio Médio por Hora do Dia")
+    axes[1].set_xlabel("Hora")
+    axes[1].set_ylabel("Subsídio Médio (R$)")
+    axes[1].set_xticks(range(0, 24))
 
     plt.suptitle("Padrão Temporal das Transações", fontweight="bold")
     plt.tight_layout()

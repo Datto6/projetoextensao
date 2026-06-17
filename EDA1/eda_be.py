@@ -201,6 +201,7 @@ def secao_valores(out: Path):
     vl_linha_cnt=pd.Series(dtype=np.int64)
     vl_trans_cnt=pd.Series(dtype=np.int64)
     vl_subsidio_cnt=pd.Series(dtype=np.int64)
+    pct_subsidio_cnt=pd.Series(dtype=np.int64)
     cols_in_use={
         "Vl Linha":                "vl_linha",
         "Vl Trans":                "vl_trans",
@@ -220,6 +221,9 @@ def secao_valores(out: Path):
             if "vl_subsidio" in dia.columns:
                 cnt = dia["vl_subsidio"].value_counts()
                 vl_subsidio_cnt = vl_subsidio_cnt.add(cnt, fill_value=0)
+            if "pct_subsidio" in dia.columns:
+                cnt = dia["pct_subsidio"].dropna().clip(0, 100).value_counts()
+                pct_subsidio_cnt=pct_subsidio_cnt.add(cnt,fill_value=0)
     valores = { #manter num dict p economizar ficar mais legivel
     "vl_linha": vl_linha_cnt,
     "vl_trans": vl_trans_cnt,
@@ -248,28 +252,25 @@ def secao_valores(out: Path):
     plt.savefig(out / "02_distribuicao_valores.png", dpi=150, bbox_inches="tight")
     plt.close()
 
-    # Boxplots por tipo de aplicação
-    if "tipo_aplicacao" in df.columns and "vl_subsidio" in df.columns:
-        fig, ax = plt.subplots(figsize=FIGSIZE_WIDE)
-        ordem = df.groupby("tipo_aplicacao")["vl_subsidio"].median().sort_values(ascending=False).index
-        sns.boxplot(data=df, x="tipo_aplicacao", y="vl_subsidio", order=ordem, ax=ax, palette="pastel")
-        ax.set_title("Distribuição do Subsídio por Tipo de Aplicação")
-        ax.set_xlabel("Tipo de Aplicação")
-        ax.set_ylabel("Vl Subsídio (R$)")
-        plt.tight_layout()
-        plt.savefig(out / "02b_subsidio_por_aplicacao_boxplot.png", dpi=150, bbox_inches="tight")
-        plt.close()
+    # Boxplots por tipo de aplicação --> Retirado porque nao consigo interpretar muito sentido
 
-    # Percentual de subsídio
-    if "pct_subsidio" in df.columns:
-        fig, ax = plt.subplots(figsize=(8, 4))
-        sns.histplot(df["pct_subsidio"].dropna().clip(0, 100), bins=40, kde=False, ax=ax, color="coral")
-        ax.set_title("Distribuição do Percentual de Subsídio (% do Vl Linha)")
-        ax.set_xlabel("% Subsídio")
-        ax.set_ylabel("Frequência")
-        plt.tight_layout()
-        plt.savefig(out / "02c_pct_subsidio.png", dpi=150, bbox_inches="tight")
-        plt.close()
+    fig, ax = plt.subplots(figsize=(8, 4))
+    serie = pct_subsidio_cnt.sort_index()
+
+    bins = np.arange(0, 102.5, 2.5)
+
+    bin_ids = pd.cut(serie.index.astype(float),bins=bins,include_lowest=True) #determina ids de bins
+    hist = serie.groupby(bin_ids).sum() #soma as frequencias dentro de cada bin 
+    centers = [(interval.left + interval.right) / 2
+        for interval in hist.index]
+
+    ax.bar(centers, hist.values, width=2.5)
+    ax.set_title("Distribuição do Percentual de Subsídio (% do Vl Linha)")
+    ax.set_xlabel("% Subsídio")
+    ax.set_ylabel("Frequência")
+    plt.tight_layout()
+    plt.savefig(out / "02c_pct_subsidio.png", dpi=150, bbox_inches="tight")
+    plt.close()
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -279,6 +280,7 @@ def secao_valores(out: Path):
 def secao_temporal(out: Path):
     print("[3/7] Análise Temporal")
     hora_cnt = pd.Series(dtype=np.int64)
+    hora_sub_sum = pd.Series(dtype=np.float64)
     diario_trans = {}
     diario_subs = {}
     all_latencies = []
@@ -297,6 +299,9 @@ def secao_temporal(out: Path):
             if "hora" in dia.columns:
                 cnt = dia["hora"].value_counts()
                 hora_cnt = hora_cnt.add(cnt, fill_value=0)
+                if "vl_subsidio" in dia.columns:
+                    sub_sum = dia.groupby("hora")["vl_subsidio"].sum()
+                    hora_sub_sum = hora_sub_sum.add(sub_sum, fill_value=0)
 
             if "dia_semana" in dia.columns:
                 ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
@@ -318,7 +323,9 @@ def secao_temporal(out: Path):
                 lat = lat[lat >= 0]
                 all_latencies.append(lat)
     hora_cnt = hora_cnt.sort_index()
+    hora_sub_sum = hora_sub_sum.sort_index()
 
+    hora_sub_media = hora_sub_sum / hora_cnt
     # Transações por hora do dia
     fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
     axes[0].bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
@@ -328,13 +335,11 @@ def secao_temporal(out: Path):
     axes[0].set_xticks(range(0, 24))
 
     # Subsídio médio por hora
-    if "vl_subsidio" in df.columns:
-        hora_sub = df.groupby("hora")["vl_subsidio"].mean()
-        axes[1].plot(hora_sub.index, hora_sub.values, marker="o", color="coral")
-        axes[1].set_title("Subsídio Médio por Hora do Dia")
-        axes[1].set_xlabel("Hora")
-        axes[1].set_ylabel("Subsídio Médio (R$)")
-        axes[1].set_xticks(range(0, 24))
+    axes[1].plot(hora_sub_media.index, hora_sub_media.values, marker="o", color="coral")
+    axes[1].set_title("Subsídio Médio por Hora do Dia")
+    axes[1].set_xlabel("Hora")
+    axes[1].set_ylabel("Subsídio Médio (R$)")
+    axes[1].set_xticks(range(0, 24))
 
     plt.suptitle("Padrão Temporal das Transações", fontweight="bold")
     plt.tight_layout()
@@ -595,28 +600,21 @@ def secao_anomalias(df: pd.DataFrame, out: Path):
     n_anom = int(df["anomalia"].sum())
     print(f"  Transações sinalizadas como anômalas: {n_anom} ({n_anom/len(df)*100:.1f}%)")
 
-    # Scatter anomalias em vl_linha vs vl_subsidio
-    if "vl_linha" in df.columns and "vl_subsidio" in df.columns:
-        fig, ax = plt.subplots(figsize=FIGSIZE_SQ)
-        normal = df[df["anomalia"] == 0]
-        anoms  = df[df["anomalia"] == 1]
-        ax.scatter(normal["vl_linha"], normal["vl_subsidio"],
-                   alpha=0.4, s=20, color="steelblue", label="Normal")
-        ax.scatter(anoms["vl_linha"],  anoms["vl_subsidio"],
-                   alpha=0.9, s=60, color="red", marker="X", label=f"Anômalo (n={n_anom})")
-        ax.set_xlabel("Vl Linha (R$)")
-        ax.set_ylabel("Vl Subsídio (R$)")
-        ax.set_title("Detecção de Anomalias — Isolation Forest")
-        ax.legend()
-        plt.tight_layout()
-        plt.savefig(out / "07_anomalias_isolation_forest.png", dpi=150, bbox_inches="tight")
-        plt.close()
-
     # Exportar anomalias para revisão
     anom_df = df[df["anomalia"] == 1].copy()
-    anom_df.to_csv(out / "07_transacoes_anomalas.csv", index=False)
+    arquivo=Path(out/"07_transacoes_anomalas.csv")
+    if arquivo.is_file():
+        anom_df.to_csv(out / "07_transacoes_anomalas.csv",mode="a",header=False, index=False)
+    else:
+        anom_df.to_csv(out / "07_transacoes_anomalas.csv",mode="a",header=True, index=False)
     print(f"  Transações anômalas exportadas em: 07_transacoes_anomalas.csv")
 
+def anomalias_aux(out:Path):
+    cols_in_use=COLUNAS_BE
+    with os.scandir(PASTA) as files:
+        for file in files:
+            dia = load_data_spec(file.path,cols_in_use,TIPO, ";") #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
+            secao_anomalias(dia,out)
 
 # ════════════════════════════════════════════════════════════════════════════
 # MAIN
@@ -643,7 +641,7 @@ def main():
     secao_temporal(out)
     secao_entidades(out)
     secao_correlacoes(df, out)
-    secao_anomalias(df, out)
+    anomalias_aux(out)
 
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")
