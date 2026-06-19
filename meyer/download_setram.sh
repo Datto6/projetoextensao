@@ -2,7 +2,7 @@
 
 PADRAO="$1"
 DESTINO="$2"
-curl -s "https://dadosabertos.rj.gov.br/api/3/action/package_show?id=setram_sbu" \
+curl -s "https://dadosabertos.rj.gov.br/api/3/action/package_show?id=setram_sbe" \
   | jq -r --arg p "$PADRAO" '.result.resources[] | select(.name | test($p)) | .url' \
   | xargs -n 1 wget -c -P "$DESTINO" 
 
