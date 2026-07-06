@@ -220,6 +220,7 @@ def secao_valores(out: Path):
     with os.scandir(PASTA) as files:
         for file in files:
             dia = load_data_spec(file.path,cols_in_use,TIPO, ";") #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
+            dia=dia[dia["data_transacao"].dt.month == 8]
             if "vl_linha" in dia.columns:
                 cnt = dia["vl_linha"].value_counts() 
                 vl_linha_cnt = vl_linha_cnt.add(cnt, fill_value=0)
@@ -304,6 +305,7 @@ def secao_temporal(out: Path):
     with os.scandir(PASTA) as files:
         for file in files:
             dia = load_data_spec(file.path,cols_in_use,TIPO,";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
+            dia=dia[dia["data_transacao"].dt.month == 8]
             if "hora" in dia.columns:
                 cnt = dia["hora"].value_counts()
                 hora_cnt = hora_cnt.add(cnt, fill_value=0)
@@ -457,6 +459,7 @@ def secao_entidades(out: Path):
     with os.scandir(PASTA) as files:
         for file in files:
             dia = load_data_spec(file.path,cols_in_use,TIPO, ";") #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
+            dia=dia[dia["data_transacao"].dt.month == 8]
             if "operadora" in dia.columns: #transacoes por operadora 
                 cnt = dia["operadora"].value_counts()
                 operadora_cnt = operadora_cnt.add(cnt, fill_value=0)
@@ -648,8 +651,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="EDA — Bilhete Único Intermunicipal (BUI)"
     )
-    parser.add_argument("--input",  required=True, help="Caminho do arquivo de dados (.txt/.csv) ")
-    parser.add_argument("--tipo",deafult="BE", help="Tipo do arquivo(GT,BU OU BE)")
+    parser.add_argument("--input",  default="TRANSACAO_BE_PUBLICO_2025_08_17.csv", help="Caminho do arquivo de dados (.txt/.csv) ")
+    parser.add_argument("--tipo",default="BE", help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
     parser.add_argument("--output", default="relatorio_eda_BE", help="Pasta de saída")
     args = parser.parse_args()
@@ -659,12 +662,12 @@ def main():
     cols_use=pega_dict(args.tipo)
     df = load_data_spec(args.input, cols_use=cols_use,tipo=args.tipo,sep=args.sep)
 
-    secao_visao_geral(df, out)
-    secao_valores(out)
+    # secao_visao_geral(df, out)
+    # secao_valores(out)
     secao_temporal(out)
-    secao_entidades(out)
-    secao_correlacoes(df, out)
-    anomalias_aux(out)
+    # secao_entidades(out)
+    # secao_correlacoes(df, out)
+    # anomalias_aux(out)
 
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")

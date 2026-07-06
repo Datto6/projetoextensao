@@ -220,13 +220,15 @@ def secao_temporal(out: Path):
     hora_cnt = hora_cnt.sort_index()
 
     # Transações por hora do dia
-    fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
-    axes[0].bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
-    axes[0].set_title("Transações por Hora do Dia")
-    axes[0].set_xlabel("Hora")
-    axes[0].set_ylabel("Nº de Transações")
-    axes[0].set_xticks(range(0, 24))
-
+    fig, ax = plt.subplots(figsize=FIGSIZE_WIDE)
+    ax.bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
+    ax.set_title("Transações por Hora do Dia")
+    ax.set_xlabel("Hora")
+    ax.set_ylabel("Nº de Transações")
+    ax.set_xticks(range(0, 24))
+    plt.tight_layout()
+    plt.savefig(out / "03a_transacoes_hora_semana")
+    plt.close()
 
     # Transações por dia da semana
     nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
@@ -434,7 +436,7 @@ def main():
     parser.add_argument("--input", default="TRANSACAO_BE_PUBLICO_2025_08_17.csv",help="Caminho do arquivo de dados (.txt/.csv)")
     parser.add_argument("--tipo",default="GT", help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
-    parser.add_argument("--output", default="relatorio_eda_gt3", help="PASTA de saída")
+    parser.add_argument("--output", default="relatorio_eda_gt_final", help="PASTA de saída")
     args = parser.parse_args()
 
     out = Path(args.output)
