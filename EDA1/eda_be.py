@@ -40,7 +40,7 @@ import pandas as pd
 import seaborn as sns
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import LabelEncoder
-
+from constants import * 
 warnings.filterwarnings("ignore")
 
 # ── Estilo global ────────────────────────────────────────────────────────────
@@ -49,25 +49,8 @@ FIGSIZE_WIDE = (14, 5)
 FIGSIZE_SQ   = (10, 7)
 FIGSIZE_TALL = (12, 8)
 
-COLUNAS_BE={
-    "Nº Cartão":               "num_cartao",
-    "Descrição da Aplicação":  "descricao_aplicacao",
-    "Sindicato":               "sindicato",
-    "Operadora":               "operadora",
-    "Linha":                   "linha",
-    "Nº Carro":                "num_carro",
-    "Sentido":                 "sentido", #OBS, vazio em BE 
-    #"Nº Validador":            "num_validador",  tava dando erro na leitura disso, apenas tirei pois nao usamos
-    "Data da Transação":       "data_transacao",
-    "Data do Processamento":   "data_processamento",
-    "Vl Linha":                "vl_linha",
-    "Vl Trans":                "vl_trans",
-    "Vl Subsídio":             "vl_subsidio", #OBS, vazio em BE
-}
-
 PASTA="agosto\\BE"
 TIPO="BE"
-SENTIDO_MAP = {0: "Não informado", 1: "Ida", 2: "Volta"}
 
 # ════════════════════════════════════════════════════════════════════════════
 # 1. CARGA E LIMPEZA

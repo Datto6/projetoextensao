@@ -40,7 +40,7 @@ import pandas as pd
 import seaborn as sns
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import LabelEncoder
-
+from constants import * 
 warnings.filterwarnings("ignore")
 
 # ── Estilo global ────────────────────────────────────────────────────────────
@@ -49,25 +49,7 @@ FIGSIZE_WIDE = (14, 5)
 FIGSIZE_SQ   = (10, 7)
 FIGSIZE_TALL = (12, 8)
 
-COLUNAS_BE={
-    "Nº Cartão":               "num_cartao",
-    "Descrição da Aplicação":  "descricao_aplicacao",
-    "Sindicato":               "sindicato",
-    "Operadora":               "operadora",
-    "Linha":                   "linha",
-    "Nº Carro":                "num_carro",
-    "Sentido":                 "sentido", #OBS, vazio em BE 
-    #"Nº Validador":            "num_validador",  tava dando erro na leitura disso, apenas tirei pois nao usamos
-    "Data da Transação":       "data_transacao",
-    "Data do Processamento":   "data_processamento",
-    "Vl Linha":                "vl_linha",
-    "Vl Trans":                "vl_trans",
-    "Vl Subsídio":             "vl_subsidio", #OBS, vazio em BE
-}
-
-PASTA="agosto\\BE"
 TIPO="BE"
-SENTIDO_MAP = {0: "Não informado", 1: "Ida", 2: "Volta"}
 
 # ════════════════════════════════════════════════════════════════════════════
 # 1. CARGA E LIMPEZA
@@ -201,7 +183,7 @@ def secao_visao_geral(df: pd.DataFrame, out: Path):
 # 3. DISTRIBUIÇÕES DE VALORES
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_valores(out: Path):
+def secao_valores(input:Path,out: Path):
     print("[2/7] Distribuições de Valores")
 
     fig, axes = plt.subplots(1, 3, figsize=FIGSIZE_WIDE)
@@ -220,7 +202,7 @@ def secao_valores(out: Path):
     } #colunas que vamos ler dos arquivos do mes
 
 
-    with os.scandir(PASTA) as files:
+    with os.scandir(input) as files:
         for file in files:
             for dia in load_data_spec(file.path,cols_in_use,TIPO,";",chunksize=100_000):
                 if "vl_linha" in dia.columns:
@@ -288,7 +270,7 @@ def secao_valores(out: Path):
 # 4. ANÁLISE TEMPORAL
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_temporal(out: Path):
+def secao_temporal(input:Path,out: Path):
     print("[3/7] Análise Temporal")
     hora_cnt = pd.Series(dtype=np.int64)
     hora_sub_sum = pd.Series(dtype=np.float64)
@@ -304,7 +286,7 @@ def secao_temporal(out: Path):
         "Vl Subsídio":             "vl_subsidio",
         "Nº Cartão": "num_cartao",
     }
-    with os.scandir(PASTA) as files:
+    with os.scandir(input) as files:
         for file in files:
             for dia in load_data_spec(file.path,cols_in_use,TIPO,";",chunksize=100_000):
                 if "hora" in dia.columns:
@@ -420,7 +402,7 @@ def top_bar(series: pd.Series, title: str, xlabel: str, ax, n=15, color="steelbl
     ax.set_xlabel(xlabel)
 
 
-def secao_entidades(out: Path):
+def secao_entidades(input:Path,out: Path):
     print("[4/7] Análise por Entidade")
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 7))
@@ -457,7 +439,7 @@ def secao_entidades(out: Path):
     transacoes = defaultdict(int)
     cartoes_unicos = defaultdict(set)
     carros_unicos=defaultdict(set) #atributos para fazer resumo por linha
-    with os.scandir(PASTA) as files:
+    with os.scandir(input) as files:
         for file in files:
             for dia in load_data_spec(file.path,cols_in_use,TIPO,";",chunksize=100_000):
                 if "operadora" in dia.columns: #transacoes por operadora 

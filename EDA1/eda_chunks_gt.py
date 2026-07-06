@@ -40,7 +40,7 @@ import pandas as pd
 import seaborn as sns
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import LabelEncoder
-
+from constants import *
 warnings.filterwarnings("ignore")
 
 # ── Estilo global ────────────────────────────────────────────────────────────
@@ -49,21 +49,7 @@ FIGSIZE_WIDE = (14, 5)
 FIGSIZE_SQ   = (10, 7)
 FIGSIZE_TALL = (12, 8)
 
-COLUNAS_GT={
-    "Nº Cartão":               "num_cartao",
-    "Descrição da Aplicação":  "descricao_aplicacao",
-    "Sindicato":               "sindicato",
-    "Operadora":               "operadora",
-    "Linha":                   "linha",
-    "Nº Carro":                "num_carro",
-    "Nº Validador":            "num_validador",
-    "Data da Transação":       "data_transacao",
-    "Data do Processamento":   "data_processamento",
-    "Transações":               "transacoes", 
-    "Escola":                  "escola",
-    "Nº Censo Escola":          "num_escola",
-}
-PASTA="agosto\\GT"
+
 TIPO="GT"
 SENTIDO_MAP = {0: "Não informado", 1: "Ida", 2: "Volta"}
 
@@ -186,7 +172,7 @@ def secao_visao_geral(df: pd.DataFrame, out: Path):
 # 3. ANÁLISE TEMPORAL
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_temporal(out: Path):
+def secao_temporal(input:Path,out: Path):
     print("[3/7] Análise Temporal")
     hora_cnt = pd.Series(dtype=np.int64)
     diario_trans = {}
@@ -198,7 +184,7 @@ def secao_temporal(out: Path):
         "Data do Processamento":   "data_processamento",
         "Nº Cartão": "num_cartao",
     }
-    with os.scandir(PASTA) as files:
+    with os.scandir(input) as files:
         for file in files:
             for dia in load_data_spec(file.path,cols_in_use,TIPO,";",chunksize=100_000):
                 if "hora" in dia.columns:
@@ -292,7 +278,7 @@ def top_bar(series: pd.Series, title: str, xlabel: str, ax, n=15, color="steelbl
     ax.set_xlabel(xlabel)
 
 
-def secao_entidades(out: Path):
+def secao_entidades(input:Path,out: Path):
     print("[4/7] Análise por Entidade")
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 7))
@@ -316,7 +302,7 @@ def secao_entidades(out: Path):
     cartoes_unicos = defaultdict(set)
     carros_unicos=defaultdict(set) #atributos para fazer resumo por linha
 
-    with os.scandir(PASTA) as files:
+    with os.scandir(input) as files:
         for file in files:
             dia = load_data_spec(file.path,cols_in_use,TIPO, ";") #pegar tipo de arquivo como ultimos 2 chars da PASTA(PASTA ta agosto/BU agosto/BE etc)
             if "operadora" in dia.columns: #transacoes por operadora 
@@ -386,46 +372,6 @@ def secao_entidades(out: Path):
     resumo_linha = (resumo_linha.sort_values("transacoes", ascending=False).round(2))   
     resumo_linha.to_csv(out / "04c_resumo_por_linha.csv",index=False)
     print(f"  Resumo por linha exportado ({len(resumo_linha)} linhas).")
-
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# 7. CORRELAÇÕES E MAPA DE CALOR
-# ════════════════════════════════════════════════════════════════════════════
-
-def secao_correlacoes(df: pd.DataFrame, out: Path):
-    print("[6/7] Correlações")
-
-    cols_in_use={
-        "Sindicato":               "sindicato",
-        "hora":                     "hora",
-        "Sentido":                 "sentido",
-        "Descrição da Aplicação":  "descricao_aplicacao",
-        "tipo_aplicacao": "tipo_aplicacao"
-    }
-    partes_corr=[]
-    with os.scandir(PASTA) as files:
-        for file in files:
-            dia = load_data_spec(file.path,cols_in_use,TIPO,";")
-            partes_corr.append(dia)
-
-    corr_df = pd.concat(partes_corr,ignore_index=True)
-    corr = corr_df.corr(numeric_only=True)
-    fig, ax = plt.subplots(figsize=FIGSIZE_SQ)
-    mask = np.triu(np.ones_like(corr, dtype=bool))
-    sns.heatmap(corr, mask=mask, annot=True, fmt=".2f", cmap="coolwarm",
-                center=0, linewidths=0.5, ax=ax)
-    ax.set_title("Mapa de Correlações — Variáveis Numéricas", fontweight="bold")
-    plt.tight_layout()
-    plt.savefig(out / "06_mapa_correlacoes.png", dpi=150, bbox_inches="tight")
-    plt.close()
-
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# 8. DETECÇÃO DE ANOMALIAS (Isolation Forest) --> nao da p GT, sem numericos
-# ════════════════════════════════════════════════════════════════════════════
-
 
 # ════════════════════════════════════════════════════════════════════════════
 # MAIN

@@ -40,7 +40,7 @@ import pandas as pd
 import seaborn as sns
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import LabelEncoder
-
+from constants import *
 warnings.filterwarnings("ignore")
 
 # ── Estilo global ────────────────────────────────────────────────────────────
@@ -48,54 +48,6 @@ sns.set_theme(style="whitegrid", palette="muted", font_scale=1.05)
 FIGSIZE_WIDE = (14, 5)
 FIGSIZE_SQ   = (10, 7)
 FIGSIZE_TALL = (12, 8)
-
-COLUNAS_BU = {
-    "Nº Cartão":               "num_cartao",
-    "Descrição da Aplicação":  "descricao_aplicacao",
-    "Sindicato":               "sindicato",
-    "Operadora":               "operadora",
-    "Linha":                   "linha",
-    "Nº Carro":                "num_carro",
-    "Sentido":                 "sentido",
-    # "Nº Validador":            "num_validador", #tava dando erro na leitura disso, apenas tirei pois nao usamos
-    "Data da Transação":       "data_transacao", #dayfirst=True
-    "Data do Processamento":   "data_processamento", #dayfirst=true
-    "Vl Linha":                "vl_linha",
-    "Vl Trans":                "vl_trans",
-    "Vl Subsídio":             "vl_subsidio",
-    "Qtde Integrações":        "qtde_integracoes",
-    "Data da Ordem":           "data_ordem", #dayfirst=False
-    "Nº Ordem":                "num_ordem",
-}
-COLUNAS_BE={
-    "Nº Cartão":               "num_cartao",
-    "Descrição da Aplicação":  "descricao_aplicacao",
-    "Sindicato":               "sindicato",
-    "Operadora":               "operadora",
-    "Linha":                   "linha",
-    "Nº Carro":                "num_carro",
-    "Sentido":                 "sentido",
-    # "\"text(\"\"Nº Validador\"\")\"":            "num_validador", # tava dando erro na leitura disso, apenas tirei pois nao usamos
-    "Data da Transação":       "data_transacao", #dayfirst=true
-    "Data do Processamento":   "data_processamento", #dayfirst=true
-    "Vl Linha":                "vl_linha",
-    "Vl Trans":                "vl_trans",
-    "Vl Subsídio":             "vl_subsidio",
-}
-COLUNAS_GT={
-    "Nº Cartão":               "num_cartao",
-    "Descrição da Aplicação":  "descricao_aplicacao",
-    "Sindicato":               "sindicato",
-    "Operadora":               "operadora",
-    "Linha":                   "linha",
-    "Nº Carro":                "num_carro",
-    "Nº Validador":            "num_validador",
-    "Data da Transação":       "data_transacao",  #dayfirst=False
-    "Data do Processamento":   "data_processamento", #dayfirst=False
-    "Transações":               "transacoes", 
-    "Escola":                  "escola",
-    "Nº Censo Escola":          "num_escola",
-}
 TIPOS=["agosto\\BE","agosto\\BU","agosto\\GT"]
 SENTIDO_MAP = {0: "Não informado", 1: "Ida", 2: "Volta"}
 
