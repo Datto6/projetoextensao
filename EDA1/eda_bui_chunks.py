@@ -516,13 +516,11 @@ def secao_sentido_integracoes(input:Path,out: Path):
     print("[5/7] Sentido e Integrações")
 
     fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
-    cols_in_use={
-        "Sentido":                 "sentido",
-        "sentido_label":       "sentido_label",
-        "Qtde Integrações":   "qtde_integracoes",
-        "Vl Linha":                "vl_linha",
-        "Vl Subsídio":             "vl_subsidio",
-    }
+    cols_in_use=[
+        "sentido_label",
+        "qtde_integracoes",
+        "vl_subsidio",
+    ]
     subsidio_sum = pd.Series(dtype=float)
     subsidio_count = pd.Series(dtype=np.int64)
     sentido_cnt=pd.Series(dtype=np.int64)
@@ -629,7 +627,7 @@ def main():
     # secao_visao_geral(df, out)
     # secao_valores(out)
     #secao_temporal(input,out)
-    secao_entidades(input,out)
+    # secao_entidades(input,out)
     secao_sentido_integracoes(input,out)
 
     print(f"\n{'═'*60}")
