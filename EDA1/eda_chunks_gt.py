@@ -69,6 +69,7 @@ def load_data_spec(path: str, cols_use:list, tipo:str,sep: str=",",chunksize=Non
         if k in available_cols
     }
     if available_cols:
+        print(f"Acessando arquivo {path}")
         return pd.read_csv(
             path,
             sep=sep,

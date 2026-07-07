@@ -48,91 +48,47 @@ sns.set_theme(style="whitegrid", palette="muted", font_scale=1.05)
 FIGSIZE_WIDE = (14, 5)
 FIGSIZE_SQ   = (10, 7)
 FIGSIZE_TALL = (12, 8)
-TIPOS=["agosto\\BE","agosto\\BU","agosto\\GT"]
 SENTIDO_MAP = {0: "Não informado", 1: "Ida", 2: "Volta"}
-
+TIPO="BU"
 # ════════════════════════════════════════════════════════════════════════════
 # 1. CARGA E LIMPEZA
 # ════════════════════════════════════════════════════════════════════════════
 
-def parse_brl(series: pd.Series) -> pd.Series:
-    """Converte 'R$ 1.234,56' → 1234.56 (float)."""
-    return (
-        series.astype(str)
-        .str.replace(r"R\$\s*", "", regex=True)
-        .str.replace(".", "", regex=False)
-        .str.replace(",", ".", regex=False)
-        .str.strip()
-        .replace("", np.nan)
-        .astype(float)
-    )
+def load_data_spec(path: str, cols_use:list, tipo:str,sep: str=",",chunksize=None):
+    #auxiliar de load_data que especifica as colunas a serem lidas, e pula a leitura se nao ha nenhuma coluna em comum, usando o dicionario que ja sabemos que existe
+    dicionario_tipo=pega_dict_processado(tipo)
 
-def load_data(path: str, cols_use:dict,tipo:str, sep: str = ";") -> pd.DataFrame:
-    print(f"\n{'─'*60}")
-    print(f"  Carregando: {path}")
-    print(f"{'─'*60}")
-    df = pd.read_csv(path, sep=sep, encoding="utf-8-sig", dtype=str,usecols=cols_use.keys())
+    available_cols = [ #pegar colunas em comum com cols_use e dicionario do tipo
+        col for col in cols_use
+        if col in dicionario_tipo
+    ]
+    dtypes={
+        k:v for k,v in DTYPES_GT.items()
+        if k in available_cols
+    }
+    if available_cols:
+        print(f"Acessando arquivo {path}")
+        return pd.read_csv(
+            path,
+            sep=sep,
+            usecols=available_cols, #estamos na parte ja processada
+            dtype=dtypes,
+            chunksize=chunksize,
+        )
+    return pd.DataFrame()
 
-    # Normalizar nomes de colunas (strip de espaços)
-    df.columns = df.columns.str.strip()
-    df.rename(columns=cols_use, inplace=True)
-
-    # Datas
+def date_formatter(df:pd.DataFrame,tipo:str):
     if tipo=="GT":
-        for col in ["data_transacao", "data_processamento", "data_ordem"]:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+            for col in ["data_transacao", "data_processamento", "data_ordem"]:
+                if col in df.columns:
+                    df[col] = pd.to_datetime(df[col], dayfirst=False, errors="coerce")
     if tipo=="BE" or tipo=="BU":
         for col in ["data_transacao", "data_processamento"]:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
-        if "data_ordem" in df.columns:
-            df["data_ordem"]=pd.to_datetime(df[col], dayfirst=False, errors="coerce")
-
-
-    # Monetários
-    for col in ["vl_linha", "vl_trans", "vl_subsidio"]:
-        if col in df.columns:
-            df[col] = parse_brl(df[col])
-
-    # Numéricos simples
-    for col in ["sentido", "qtde_integracoes", "num_carro", "num_validador", "num_ordem"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    # Campos derivados
-    if "data_transacao" in df.columns:
-        df["hora"]       = df["data_transacao"].dt.hour
-        df["dia_semana"] = df["data_transacao"].dt.day_name()
-        df["data_dia"]   = df["data_transacao"].dt.date
-
-    if "vl_linha" in df.columns and "vl_trans" in df.columns:
-        df["pct_subsidio"] = (df["vl_subsidio"] / df["vl_linha"] * 100).round(2)
-
-    if "sentido" in df.columns:
-        df["sentido_label"] = df["sentido"].map(SENTIDO_MAP)
-
-    # Prefixo do tipo de benefício (ex: '400' de '400-VALE TRANSPORTE…')
-    if "descricao_aplicacao" in df.columns:
-        df["tipo_aplicacao"] = df["descricao_aplicacao"].str.extract(r"^(\d+)")
-
-    print(f"  Linhas: {len(df):,}  |  Colunas: {df.shape[1]}")
-    print(f"  Período: {df['data_transacao'].min()} → {df['data_transacao'].max()}" if "data_transacao" in df.columns else "")
+            if "data_ordem" in df.columns:
+                df["data_ordem"]=pd.to_datetime(df[col], dayfirst=False, errors="coerce")
     return df
-
-def load_data_spec(path: str, cols_use:dict, tipo:str,sep: str=";"):
-    #auxiliar de load_data que especifica as colunas a serem lidas, e pula a leitura se nao ha nenhuma coluna em comum, usando o dicionario que ja sabemos que existe
-    dicionario_tipo=pega_dict(tipo)
-
-    available_cols = { #pegar colunas em comum com cols_use e dicionario do tipo
-        k: v for k, v in cols_use.items()
-        if k in dicionario_tipo
-    }
-
-    if available_cols:
-        return load_data(path, available_cols,tipo, sep) #passar elas pro load_data
-
-    return pd.DataFrame() 
 # ════════════════════════════════════════════════════════════════════════════
 # 2. VISÃO GERAL
 # ════════════════════════════════════════════════════════════════════════════
@@ -178,7 +134,7 @@ def secao_visao_geral(df: pd.DataFrame, out: Path):
 # 3. DISTRIBUIÇÕES DE VALORES
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_valores(out: Path):
+def secao_valores(input:Path,out: Path):
     print("[2/7] Distribuições de Valores")
 
     fig, axes = plt.subplots(1, 3, figsize=FIGSIZE_WIDE)
@@ -191,18 +147,18 @@ def secao_valores(out: Path):
     vl_subsidio_cnt=pd.Series(dtype=np.int64)
     pct_subsidio_cnt=pd.Series(dtype=np.int64)
 
-    cols_in_use={
-        "Vl Linha":                "vl_linha",
-        "Vl Trans":                "vl_trans",
-        "Vl Subsídio":             "vl_subsidio",
-    } #colunas que vamos ler dos arquivos do mes
+    cols_in_use=[
+        "vl_linha",
+        "vl_trans",
+        "vl_subsidio",
+        "pct_subsidio"
+    ] #colunas que vamos ler dos arquivos do mes
 
 
-    for pasta in TIPOS:
-        with os.scandir(pasta) as files:
-            for file in files:
-                dia = load_data_spec(file.path,cols_in_use,pasta[-2:], ";") #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
-                dia=dia[dia["data_transacao"].dt.month == 8]
+    with os.scandir(input) as files:
+        for file in files:
+            for dia in load_data_spec(file.path,cols_in_use,TIPO,",",chunksize=100_000): #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
+                dia=date_formatter(dia,TIPO)
                 if "vl_linha" in dia.columns:
                     cnt = dia["vl_linha"].value_counts() 
                     vl_linha_cnt = vl_linha_cnt.add(cnt, fill_value=0)
@@ -269,7 +225,7 @@ def secao_valores(out: Path):
 # 4. ANÁLISE TEMPORAL
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_temporal(out: Path):
+def secao_temporal(input:Path,out: Path):
     print("[3/7] Análise Temporal")
     hora_cnt = pd.Series(dtype=np.int64)
     hora_sub_sum = pd.Series(dtype=np.float64)
@@ -277,19 +233,20 @@ def secao_temporal(out: Path):
     diario_subs = {}
     all_latencies = []
     dia_semana_cnt = pd.Series(dtype=np.int64)
-    cols_in_use={
-        "Data da Transação":       "data_transacao",
-        "Data do Processamento":   "data_processamento",
-        "Vl Linha":                "vl_linha",
-        "Vl Trans":                "vl_trans",
-        "Vl Subsídio":             "vl_subsidio",
-        "Nº Cartão": "num_cartao",
-    }
-    for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
-        with os.scandir(pasta) as files:
-            for file in files:
-                dia = load_data_spec(file.path,cols_in_use,pasta[-2:],";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
-                dia=dia[dia["data_transacao"].dt.month == 8]
+    cols_in_use=[
+        "hora",
+        "vl_subsidio",
+        "dia_semana",
+        "data_dia", 
+        "num_cartao", 
+        "vl_subsidio",
+        "data_processamento",
+        "data_transacao",
+    ]#colunas p ler
+    with os.scandir(input) as files:
+        for file in files:
+            for dia in load_data_spec(file.path,cols_in_use,TIPO,",",chunksize=100_000):
+                dia=date_formatter(dia,TIPO)
                 if "hora" in dia.columns: #agregando transacoes por hora 
                     cnt = dia["hora"].value_counts()
                     hora_cnt = hora_cnt.add(cnt, fill_value=0)
@@ -405,22 +362,22 @@ def top_bar(series: pd.Series, title: str, xlabel: str, ax, n=15, color="steelbl
     ax.set_xlabel(xlabel)
 
 
-def secao_entidades( out: Path):
+def secao_entidades(input:Path,out: Path):
     print("[4/7] Análise por Entidade")
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 7))
-    cols_in_use={
-        "Operadora":               "operadora",
-        "Vl Linha":                "vl_linha",
-        "Vl Trans":                "vl_trans",
-        "Vl Subsídio":             "vl_subsidio",
-        "Linha":                   "linha",
-        "Sindicato":               "sindicato",
-        "pct_subsidio":            "pct_subsidio",
-        "Nº Cartão": "num_cartao",
-        "Nº Carro":                "num_carro",
-        "Data da Transação":       "data_transacao",
-    }
+    cols_in_use=[
+        "operadora",
+        "linha", 
+        "vl_linha",
+        "vl_subsidio",
+        "vl_trans",
+        "pct_subsidio",
+        "num_cartao",
+        "dia_semana",
+        "sindicato",
+        "num_carro",
+    ]#colunas a ler
     operadora_cnt = pd.Series(dtype=np.int64)
     linha_cnt = pd.Series(dtype=np.int64)
     sindicato_cnt = pd.Series(dtype=np.int64)
@@ -444,10 +401,10 @@ def secao_entidades( out: Path):
 
     cartoes_unicos = defaultdict(set)
     carros_unicos=defaultdict(set)
-    for pasta in TIPOS:
-        with os.scandir(pasta) as files:
-            for file in files:
-                dia = load_data_spec(file.path,cols_in_use,pasta[-2:], ";") #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
+    with os.scandir(input) as files:
+        for file in files:
+            for dia in load_data_spec(file.path,cols_in_use,TIPO,",",chunksize=100_000):
+                dia=date_formatter(dia,TIPO)
                 if "operadora" in dia.columns: #transacoes por operadora 
                     cnt = dia["operadora"].value_counts()
                     operadora_cnt = operadora_cnt.add(cnt, fill_value=0)
@@ -555,7 +512,7 @@ def secao_entidades( out: Path):
 # 6. ANÁLISE DE SENTIDO E INTEGRAÇÕES
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_sentido_integracoes(out: Path):
+def secao_sentido_integracoes(input:Path,out: Path):
     print("[5/7] Sentido e Integrações")
 
     fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
@@ -571,11 +528,10 @@ def secao_sentido_integracoes(out: Path):
     sentido_cnt=pd.Series(dtype=np.int64)
     integracoes_cnt=pd.Series(dtype=np.int64)
 
-    for pasta in TIPOS: #extrai apenas essas colunas de cada arquivo do mes, a ser usado pela analise temporal
-        with os.scandir(pasta) as files:
-            for file in files:
-                dia = load_data_spec(file.path,cols_in_use,pasta[-2:],";") #pasta [-2:] indica do tipo da entrada,definida no diretorio
-                dia=dia[dia["data_transacao"].dt.month == 8]
+    with os.scandir(input) as files:
+        for file in files:
+            for dia in load_data_spec(file.path,cols_in_use,TIPO,",",chunksize=100_000):
+                dia=date_formatter(dia,TIPO)
                 if "sentido_label" in dia.columns:
                     cnt = dia["sentido_label"].value_counts()
                     sentido_cnt = sentido_cnt.add(cnt, fill_value=0)
@@ -647,6 +603,8 @@ def secao_correlacoes(df: pd.DataFrame, out: Path):
         plt.close()
 
 
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════════════════════
@@ -656,24 +614,23 @@ def main():
     parser = argparse.ArgumentParser(
         description="EDA — Bilhete Único Intermunicipal (BUI)"
     )
-    parser.add_argument("--input",  default="TRANSACAO_BE_PUBLICO_2025_08_17.csv", help="Caminho do arquivo de dados (.txt/.csv)")
-    parser.add_argument("--tipo", default="BE", help="Tipo do arquivo(GT,BU OU BE)")
-    parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
-    parser.add_argument("--output", default="relatorio_eda_BUI_reuniao7", help="Pasta de saída")
+    parser.add_argument("--input",  required=True, help="Caminho do diretorio de arquivos separados por mes e ja processados")
+    parser.add_argument("--tipo", default="BU", help="Tipo do arquivo(GT,BU OU BE)")
+    parser.add_argument("--sep",    default=",",   help="Delimitador (padrão: ',')")
+    parser.add_argument("--output", default="relatorio_eda_BUI_chunks", help="Pasta de saída")
     args = parser.parse_args()
 
     out = Path(args.output)
+    input=Path(args.input)
     out.mkdir(parents=True, exist_ok=True)
     cols_use=pega_dict(args.tipo)
     df = load_data_spec(args.input, cols_use=cols_use,tipo=args.tipo,sep=args.sep)
 
     # secao_visao_geral(df, out)
     # secao_valores(out)
-    secao_temporal(out)
-    # secao_entidades(out)
-    # secao_sentido_integracoes(out)
-    # secao_correlacoes(df, out)
-    # anomalias_aux(out)
+    #secao_temporal(input,out)
+    secao_entidades(input,out)
+    secao_sentido_integracoes(input,out)
 
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")
