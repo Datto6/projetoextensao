@@ -22,8 +22,6 @@ def parse_brl(series: pd.Series) -> pd.Series:
         .replace("", np.nan)
         .astype(float)
     )
-def pega_dict(tipo: str) -> dict:
-    if tipo=="BE": return COLUNAS_BE
 
 def load_data(path: str, cols_use:dict, tipo:str, sep: str = ";") -> pd.DataFrame:
     print(f"\n{'─'*60}")
@@ -87,15 +85,21 @@ def load_data_spec(path: str, cols_use:dict, tipo:str,sep: str=";"):
         if k in dicionario_tipo
     }
 
-    if available_cols:
+    if available_cols and os.path.exists(path) and os.path.getsize(path) > 0:
         return load_data(path, available_cols, tipo, sep) #passar elas pro load_data
-
+    else:
+        print(f"{path} eh um arquivo em branco.")
     return pd.DataFrame()
 
-def separar(input: str, out: str,tipo:str):
+def separar(input: Path, out: Path,tipo:str):
+    files_touched=[]
+    empty_files=[]
     with os.scandir(input) as files:
         for file in files:
-            dia = load_data_spec(file.path,COLUNAS_BE,tipo, ";")
+            dia = load_data_spec(file.path,pega_dict(tipo),tipo, ";")
+            if dia.empty:
+                empty_files.append(str(file.path))
+                continue #se o dia nao tiver nenhum valor, pulamos essa iteracao
             for month, group in dia.groupby(dia["data_transacao"].dt.month): #agrupa pela coluna de transacao
                 key = f"mes_{month}_{tipo}.csv"
                 arquivo=Path(out / key)
@@ -103,19 +107,21 @@ def separar(input: str, out: str,tipo:str):
                     group.to_csv(arquivo,mode="a",header=False, index=False) #modo append, sem o header
                 else:
                     group.to_csv(arquivo,mode="w",header=True, index=False) #cria novo arquivo do mes
-                print(f"Adicionado ao mes {month}")
+                files_touched.append(str(file.path))
+    print(f"Arquivos adicionados:{files_touched}")
+    print(f"Arquivos vazios:{empty_files}")
 
 def main():
     start_time = time.perf_counter()
     parser = argparse.ArgumentParser(
         description="EDA — Bilhete Único Intermunicipal (BUI)"
     )
-    parser.add_argument("--input",  default="BE_2026", help="Caminho do diretorio")
-    parser.add_argument("--tipo",default="BE", help="Tipo do arquivo(GT,BU OU BE)")
+    parser.add_argument("--input",  required=True, help="Caminho do diretorio")
+    parser.add_argument("--tipo",required=True, help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
     parser.add_argument("--output", default="meses_BE_2026", help="Pasta de saída")
     args = parser.parse_args()
-
+    input=Path(args.input)
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     separar(input,out,args.tipo)

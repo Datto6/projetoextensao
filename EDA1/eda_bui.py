@@ -66,10 +66,6 @@ def parse_brl(series: pd.Series) -> pd.Series:
         .replace("", np.nan)
         .astype(float)
     )
-def pega_dict(tipo: str) -> dict:
-    if tipo=="BE": return COLUNAS_BE
-    if tipo=="BU": return COLUNAS_BU
-    if tipo=="GT": return COLUNAS_GT
 
 def load_data(path: str, cols_use:dict,tipo:str, sep: str = ";") -> pd.DataFrame:
     print(f"\n{'─'*60}")
