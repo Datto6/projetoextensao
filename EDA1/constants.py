@@ -127,3 +127,21 @@ DTYPES_BU={
     'tipo_aplicacao': 'str',
     'cartao_hash':'str'
 }
+
+DTYPES_LINHA={
+    'transacoes':'int64',
+    'linha': 'str',
+    'cartoes_unicos':'int64',
+    'carros_unicos':'int64',
+    'vl_linha_medio':'float64',
+    'vl_trans_medio':'float64',
+    'vl_subsidio_total':'float64',
+    'pct_subsidio_medio':'float64',
+    'Seg':'int64',
+    'Ter':'int64',
+    'Qua':'int64',
+    'Qui':'int64',
+    'Sex':'int64',
+    'Sáb':'int64',
+    'Dom':'int64',
+}

@@ -437,12 +437,12 @@ def secao_entidades(input:Path,out: Path):
                         cnt=grp["dia_semana"].map(map_dias).value_counts().reindex(nomes_pt,fill_value=0) #quantas transacoes por dia de semana
                         dia_semana_cnt=dia_semana_cnt.add(cnt,fill_value=0)
                         for dia_sem, n in cnt.items():
-                            dia_semana_por_linha[linha][dia_sem] += n
+                            dia_semana_por_linha[linha][dia_sem] += n #adiciona transacoes por dia de semana em sua respectiva linha
                 if "sindicato" in dia.columns: #transacoes por sindicato
                     cnt = dia["sindicato"].value_counts()
                     sindicato_cnt = sindicato_cnt.add(cnt, fill_value=0)
 
-    valores = { #manter num dict p economizar ficar mais legivel
+    valores = { #manter num dict p  ficar mais legivel
     "operadora": operadora_cnt,
     "linha": linha_cnt,
     "sindicato": sindicato_cnt,
@@ -522,7 +522,7 @@ def secao_sentido_integracoes(input:Path,out: Path):
         "vl_subsidio",
     ]
     subsidio_sum = pd.Series(dtype=float)
-    subsidio_count = pd.Series(dtype=np.int64)
+    subsidio_count = pd.Series(dtype=np.int64) #sum e count para inferir media
     sentido_cnt=pd.Series(dtype=np.int64)
     integracoes_cnt=pd.Series(dtype=np.int64)
 

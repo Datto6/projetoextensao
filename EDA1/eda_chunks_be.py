@@ -510,23 +510,22 @@ def main():
     parser = argparse.ArgumentParser(
         description="EDA — Bilhete Único Intermunicipal (BUI)"
     )
-    parser.add_argument("--input",  default="TRANSACAO_BE_PUBLICO_2025_08_17.csv", help="Caminho do arquivo de dados (.txt/.csv) ")
+    parser.add_argument("--input",  required=True, help="Caminho do diretorio de arquivos mensais ja separados")
     parser.add_argument("--tipo",default="BE", help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=",",   help="Delimitador (padrão: ',')")
-    parser.add_argument("--output", default="relatorio_eda_BE", help="Pasta de saída")
+    parser.add_argument("--output", default="relatorio_eda_chunks_BE", help="Pasta de saída")
     args = parser.parse_args()
 
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
+    input=Path(args.input)
     cols_use=pega_dict(args.tipo)
     df = load_data_spec(args.input, cols_use=cols_use,tipo=args.tipo,sep=args.sep)
 
     # secao_visao_geral(df, out)
-    # secao_valores(out)
-    secao_temporal(out)
-    # secao_entidades(out)
-    # secao_correlacoes(df, out)
-    # anomalias_aux(out)
+    # secao_valores(input,out)
+    secao_temporal(input,out)
+    secao_entidades(input,out)
 
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")
