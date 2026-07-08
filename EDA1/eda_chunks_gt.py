@@ -32,7 +32,7 @@ import os
 import warnings
 from pathlib import Path
 from collections import defaultdict
-
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
@@ -130,6 +130,8 @@ def secao_temporal(input:Path,out: Path):
     diario_subs = {}
     all_latencies = []
     dia_semana_cnt = pd.Series(dtype=np.int64)
+    semana_lat_sum=pd.Series(dtype=np.float64)
+    lat_semana_cnt=pd.Series(dtype=np.int64)
     cols_in_use=[
         "data_transacao",
         "data_processamento",
@@ -142,6 +144,9 @@ def secao_temporal(input:Path,out: Path):
         for file in files:
             for dia in load_data_spec(file.path,cols_in_use,TIPO,",",chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
+                dia=dia[dia["data_transacao"].between('2026-01-01','2026-08-01')] #filtra so na janela de 2026
+                if dia.empty:
+                    continue
                 if "hora" in dia.columns:
                     cnt = dia["hora"].value_counts()
                     hora_cnt = hora_cnt.add(cnt, fill_value=0)
@@ -157,11 +162,26 @@ def secao_temporal(input:Path,out: Path):
                         diario_trans[data] = (diario_trans.get(data, 0)+ row["transacoes"])
 
                 if all(c in dia.columns for c in ["data_transacao", "data_processamento"]): #idem
-                    lat = (dia["data_processamento"]- dia["data_transacao"]).dt.total_seconds() / 3600
-                    lat = lat[lat >= 0]
-                    all_latencies.append(lat)
-    hora_cnt = hora_cnt.sort_index()
+                    dia["latencia"]=(dia["data_processamento"]- dia["data_transacao"]).dt.total_seconds() / 3600
+                    dia = dia[dia["latencia"] >= 0]
+                    all_latencies.append(dia["latencia"])
+                if all(c in dia.columns for c in ["latencia", "dia_semana"]):
+                    ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+                    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+                    map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
+                    grp = dia.groupby("dia_semana")["latencia"] #agrupa por dia de semana, apenas a coluna latencia
 
+                    lat_sum = grp.sum() #soma os valores nos grps
+                    lat_cnt = grp.count() #conta qnts rows nos grps
+
+                    lat_sum.index = lat_sum.index.map(map_dias) #muda Monday p Seg
+                    lat_cnt.index = lat_cnt.index.map(map_dias)
+
+                    semana_lat_sum = semana_lat_sum.add(lat_sum, fill_value=0)
+                    lat_semana_cnt = lat_semana_cnt.add(lat_cnt, fill_value=0)
+
+
+    hora_cnt = hora_cnt.sort_index()
     # Transações por hora do dia
     fig, ax = plt.subplots(figsize=FIGSIZE_WIDE)
     ax.bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
@@ -186,19 +206,44 @@ def secao_temporal(input:Path,out: Path):
     plt.savefig(out / "03b_transacoes_dia_semana.png", dpi=150, bbox_inches="tight")
     plt.close()
 
+    #Latencia Media por Dia de Semana
+    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+
+    semana_lat_sum.reindex(nomes_pt, fill_value=0)
+    lat_semana_cnt = lat_semana_cnt.reindex(nomes_pt, fill_value=0)#Latencia media eh soma da latencia/numero de transacoes
+
+    lat_mean = semana_lat_sum / lat_semana_cnt
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
+    ax.set_title("Latência média por Dia da Semana")
+    ax.set_xlabel("Dia")
+    ax.set_ylabel("Latência Média em Horas")
+    plt.tight_layout()
+    plt.savefig(out / "03e_latencia_media_semana.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
     # Série diária (se houver mais de 1 dia)
     diario = pd.DataFrame({
         "data_dia": list(diario_trans.keys()),
         "transacoes": list(diario_trans.values())
     })
-
+    diario["data_dia"]=pd.to_datetime(diario["data_dia"],dayfirst=False)
     diario = diario.sort_values("data_dia")
-
     fig, ax1 = plt.subplots(figsize=FIGSIZE_WIDE)
-    ax1.bar(diario["data_dia"].astype(str), diario["transacoes"], alpha=0.6, label="Transações")
-    ax1.set_xlabel("Data")
+    ax1.bar(diario["data_dia"], diario["transacoes"], alpha=0.6, label="Transações")
+    ax1.set_xlabel("Data-ticks a cada segunda")
     ax1.set_ylabel("Nº Transações")
-    ax1.tick_params(axis="x", rotation=45)
+    ax1.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    ax1.tick_params(axis="x", 
+        which="major",
+        bottom=True,      # show bottom ticks
+        length=5,         # tick length in points
+        width=1,          # tick thickness
+        color="black",    # tick color
+        direction="out",
+        rotation=45
+        )   # "out", "in", or "inout")
     plt.title("Série Diária — Transações")
     fig.legend(loc="upper left", bbox_to_anchor=(0.1, 0.95))
     plt.tight_layout()
@@ -218,7 +263,6 @@ def secao_temporal(input:Path,out: Path):
         plt.savefig(out / "03d_latencia_processamento.png", dpi=150, bbox_inches="tight")
         plt.close()
         print(f"  Latência média: {lat_pos.mean():.1f} h | mediana: {lat_pos.median():.1f} h")
-
 
 # ════════════════════════════════════════════════════════════════════════════
 # 4. ANÁLISE POR ENTIDADE (Operadora, Linha, Sindicato, Aplicacao)
@@ -262,6 +306,9 @@ def secao_entidades(input:Path,out: Path):
         for file in files:
             for dia in load_data_spec(file.path,cols_in_use,TIPO,",",chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
+                dia=dia[dia["data_transacao"].between('2026-01-01','2026-08-01')]
+                if dia.empty:
+                    continue
                 if "operadora" in dia.columns: #transacoes por operadora 
                     cnt = dia["operadora"].value_counts()
                     operadora_cnt = operadora_cnt.add(cnt, fill_value=0)
@@ -341,7 +388,7 @@ def main():
     )
     parser.add_argument("--input", required=True,help="Caminho do arquivo de dados (.txt/.csv)")
     parser.add_argument("--tipo",default="GT", help="Tipo do arquivo(GT,BU OU BE)")
-    parser.add_argument("--sep",    default=",",   help="Delimitador (padrão: ';')")
+    parser.add_argument("--sep",    default=",",   help="Delimitador (padrão: ',')")
     parser.add_argument("--output", required=True, help="Pasta de saída")
     args = parser.parse_args()
 
@@ -349,9 +396,8 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     input=Path(args.input)
     # secao_visao_geral(df, out)
-    # secao_temporal(input,out)
-    secao_entidades(input,out)
-    # secao_correlacoes(df, out)
+    secao_temporal(input,out)
+    # secao_entidades(input,out)
 
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")
