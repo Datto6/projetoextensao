@@ -145,3 +145,26 @@ DTYPES_LINHA={
     'Sáb':'int64',
     'Dom':'int64',
 }
+
+MAP_MODAL={
+    'NÃO FILIADOS':'nan', 
+    'TRANSONIBUS':'onibus',
+    'BARCAS':'barca', 
+    'Trens RJ':'trem', 
+    'SINTERJ':'onibus', 
+    'SETRANSOL':'onibus',
+    'RIO ÔNIBUS':'onibus',
+    'VANS INTERMUNICIPAIS':'van',
+    'SETRERJ':'onibus',
+    'SETRANSDUC':'onibus',
+    'SUPERVIA':'trem',
+    'TRENS':'trem',
+    'METRÔ RIO':'metro'
+}
+MODAL_SINDICATO={
+    'onibus':['TRANSONIBUS', 'SINTERJ','SETRANSOL','RIO ÔNIBUS','SETRERJ','SETRANSDUC'],
+    'trem':['Trens RJ','SUPERVIA','TRENS'],
+    'barca':['BARCAS'],
+    'metro':['METRÔ RIO'],
+    'nan':['NÃO FILIADOS'],
+}

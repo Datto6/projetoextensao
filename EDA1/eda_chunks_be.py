@@ -236,8 +236,9 @@ def secao_temporal(input:Path,out: Path):
     diario_subs = {}
     all_latencies = []
     dia_semana_cnt = pd.Series(dtype=np.int64)
-    semana_lat_sum=pd.Series(dtype=np.float64)
-    lat_semana_cnt=pd.Series(dtype=np.int64)
+    dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    df_latencia_sum = pd.DataFrame(columns=dias,dtype="float64")
+    df_latencia_cnt= pd.DataFrame(columns=dias,dtype="float64")
     cols_in_use=[
         "hora",
         "vl_subsidio",
@@ -274,25 +275,40 @@ def secao_temporal(input:Path,out: Path):
                     for data, row in grp.iterrows():
                         diario_trans[data] = (diario_trans.get(data, 0)+ row["transacoes"])
                         diario_subs[data] = (diario_subs.get(data, 0.0)+ row["subsidio_total"])
-
                 if all(c in dia.columns for c in ["data_transacao", "data_processamento"]): #criar coluna de latencia
                     dia["latencia"]=(dia["data_processamento"]- dia["data_transacao"]).dt.total_seconds() / 3600
                     dia = dia[dia["latencia"] >= 0]
                     all_latencies.append(dia["latencia"])
-                if all(c in dia.columns for c in ["latencia", "dia_semana"]): #agrupar latencia por dia de semana
+                if "sindicato" in dia.columns:
+                    dia.rename(columns={"sindicato":"modal"},inplace=True)
+                    dia["modal"]=dia["modal"].map(MAP_MODAL)
+                if all(c in dia.columns for c in ["latencia", "dia_semana"]):
                     ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
                     nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
                     map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
-                    grp = dia.groupby("dia_semana")["latencia"] #agrupa por dia de semana, apenas a coluna latencia
 
-                    lat_sum = grp.sum() #soma os valores nos grps
-                    lat_cnt = grp.count() #conta qnts rows nos grps
+                    for modal,grp in dia.groupby("modal"):#agrupa por modal
+                        grp_modal=grp.groupby("dia_semana")["latencia"]
+                        
+                        lat_sum = grp_modal.sum()
+                        lat_cnt = grp_modal.count()
 
-                    lat_sum.index = lat_sum.index.map(map_dias) #muda Monday p Seg
-                    lat_cnt.index = lat_cnt.index.map(map_dias)
+                        lat_sum.index = lat_sum.index.map(map_dias)
+                        lat_cnt.index = lat_cnt.index.map(map_dias)
 
-                    semana_lat_sum = semana_lat_sum.add(lat_sum, fill_value=0) #soma de latencias
-                    lat_semana_cnt = lat_semana_cnt.add(lat_cnt, fill_value=0) #soma de transacoes com latencia ok, tudo agrupado por dia de semana
+                        # Make sure every weekday exists
+                        lat_sum = lat_sum.reindex(nomes_pt, fill_value=0)
+                        lat_cnt = lat_cnt.reindex(nomes_pt, fill_value=0)
+
+                        # Adiciona um novo indexo, no caso os indexos sao por modal
+                        if modal not in df_latencia_sum.index:
+                            df_latencia_sum.loc[modal] = 0.0
+
+                        if modal not in df_latencia_cnt.index:
+                            df_latencia_cnt.loc[modal] = 0
+
+                        df_latencia_sum.loc[modal] += lat_sum
+                        df_latencia_cnt.loc[modal] += lat_cnt
     hora_cnt = hora_cnt.sort_index()
     hora_sub_sum = hora_sub_sum.sort_index()
 
@@ -330,20 +346,26 @@ def secao_temporal(input:Path,out: Path):
     plt.savefig(out / "03b_transacoes_dia_semana.png", dpi=150, bbox_inches="tight")
     plt.close()
 
-    #Latencia Media por Dia de Semana
+    #Latencia Media por Dia de Semana, separado por modal
     nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
-
-    semana_lat_sum.reindex(nomes_pt, fill_value=0)
-    lat_semana_cnt = lat_semana_cnt.reindex(nomes_pt, fill_value=0)#Latencia media eh soma da latencia/numero de transacoes
-
-    lat_mean = semana_lat_sum / lat_semana_cnt
+    fig, axes=plt.subplots(2, 2, figsize=(18, 7))
+    for ax,(index,row) in zip(axes.flat,df_latencia_sum.iterrows()):
+        lat_mean = row / df_latencia_cnt.loc[index]
+        ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
+        ax.set_title(f"{index}")
+        ax.set_ylabel("Latência Média em Horas")
+    plt.tight_layout()
+    plt.suptitle("Latência Média por Modal", fontweight="bold")
+    plt.savefig(out / "03f_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    
     fig, ax = plt.subplots(figsize=(8, 4))
+    lat_mean = df_latencia_sum.loc["trem"]/ df_latencia_cnt.loc["trem"]
     ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
-    ax.set_title("Latência média por Dia da Semana")
-    ax.set_xlabel("Dia")
+    ax.set_title(f"trem")
     ax.set_ylabel("Latência Média em Horas")
     plt.tight_layout()
-    plt.savefig(out / "03e_latencia_media_semana.png", dpi=150, bbox_inches="tight")
+    plt.savefig(out / "03g_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     # Série diária (se houver mais de 1 dia)
