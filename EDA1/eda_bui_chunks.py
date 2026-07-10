@@ -85,9 +85,9 @@ def date_formatter(df:pd.DataFrame,tipo:str):
     if tipo=="BE" or tipo=="BU":
         for col in ["data_transacao", "data_processamento"]:
             if col in df.columns:
-                df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+                df[col] = pd.to_datetime(df[col], dayfirst=False, errors="coerce")
             if "data_ordem" in df.columns:
-                df["data_ordem"]=pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+                df["data_ordem"]=pd.to_datetime(df["data_ordem"], dayfirst=False, errors="coerce")
     return df
 # ════════════════════════════════════════════════════════════════════════════
 # 2. VISÃO GERAL
@@ -151,7 +151,8 @@ def secao_valores(input:Path,out: Path):
         "vl_linha",
         "vl_trans",
         "vl_subsidio",
-        "pct_subsidio"
+        "pct_subsidio",
+        "data_transacao"
     ] #colunas que vamos ler dos arquivos do mes
 
 
@@ -159,6 +160,7 @@ def secao_valores(input:Path,out: Path):
         for file in files:
             for dia in load_data_spec(file.path,cols_in_use,TIPO,",",chunksize=100_000): #pegar tipo de arquivo como ultimos 2 chars da pasta(pasta ta agosto/BU agosto/BE etc)
                 dia=date_formatter(dia,TIPO)
+                dia=dia[dia["data_transacao"].between('2026-01-01','2026-08-01')] #filtra so na janela de 2026
                 if "vl_linha" in dia.columns:
                     cnt = dia["vl_linha"].value_counts() 
                     vl_linha_cnt = vl_linha_cnt.add(cnt, fill_value=0)
@@ -241,16 +243,16 @@ def secao_temporal(input:Path,out: Path):
         "vl_subsidio",
         "dia_semana",
         "data_dia", 
-        "num_cartao", 
-        "vl_subsidio",
+        "num_cartao",
         "data_processamento",
         "data_transacao",
+        "sindicato"
     ]#colunas p ler
     with os.scandir(input) as files:
         for file in files:
             for dia in load_data_spec(file.path,cols_in_use,TIPO,",",chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
-                dia=dia[dia["data_transacao"].between('2026-01-01','2026-08-01')] #filtra so na janela de 2026
+                dia=dia[dia["data_transacao"].between('2026-01-01','2026-08-08')] #filtra so na janela de 2026
                 if dia.empty:
                     continue
                 if "hora" in dia.columns: #agregando transacoes por hora 
@@ -311,7 +313,6 @@ def secao_temporal(input:Path,out: Path):
     hora_cnt = hora_cnt.sort_index()#quantas transacoes por hora
 
     hora_sub_sum = hora_sub_sum.sort_index()
-    hora_sub_media = hora_sub_sum / hora_cnt #calculando medias de subsidio por hora com total agregado 
     # Transações por hora do dia
     fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
     axes[0].bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
@@ -320,11 +321,11 @@ def secao_temporal(input:Path,out: Path):
     axes[0].set_ylabel("Nº de Transações")
     axes[0].set_xticks(range(0, 24))
 
-    # Subsídio médio por hora
-    axes[1].plot(hora_sub_media.index, hora_sub_media.values, marker="o", color="coral")
-    axes[1].set_title("Subsídio Médio por Hora do Dia")
+    # Subsídio total por hora
+    axes[1].plot(hora_sub_sum.index, hora_sub_sum.values, marker="o", color="coral")
+    axes[1].set_title("Subsídio Total por Hora do Dia")
     axes[1].set_xlabel("Hora")
-    axes[1].set_ylabel("Subsídio Médio (R$)")
+    axes[1].set_ylabel("Subsídio Total (R$)")
     axes[1].set_xticks(range(0, 24))
 
     plt.suptitle("Padrão Temporal das Transações", fontweight="bold")
@@ -376,7 +377,7 @@ def secao_temporal(input:Path,out: Path):
     diario["subsidio_total"] = diario["data_dia"].map(diario_subs)
 
     diario = diario.sort_values("data_dia")
-    diario["data_dia"]=pd.to_datetime(diario["data_dia"],dayfirst=True)
+    diario["data_dia"]=pd.to_datetime(diario["data_dia"],dayfirst=False)
 
     fig, ax1 = plt.subplots(figsize=FIGSIZE_WIDE)
     ax1.bar(diario["data_dia"], diario["transacoes"], alpha=0.6, label="Transações")
@@ -446,6 +447,7 @@ def secao_entidades(input:Path,out: Path):
         "dia_semana",
         "sindicato",
         "num_carro",
+        "data_transacao"
     ]#colunas a ler
     operadora_cnt = pd.Series(dtype=np.int64)
     linha_cnt = pd.Series(dtype=np.int64)
@@ -592,6 +594,7 @@ def secao_sentido_integracoes(input:Path,out: Path):
         "sentido_label",
         "qtde_integracoes",
         "vl_subsidio",
+        "data_transacao"
     ]
     subsidio_sum = pd.Series(dtype=float)
     subsidio_count = pd.Series(dtype=np.int64) #sum e count para inferir media
@@ -602,7 +605,7 @@ def secao_sentido_integracoes(input:Path,out: Path):
         for file in files:
             for dia in load_data_spec(file.path,cols_in_use,TIPO,",",chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
-                dia=dia[dia["data_transacao"].between('2026-01-01','2026-08-01')] #filtra so na janela de 2026
+                dia=dia[dia["data_transacao"].between('2026-01-01','2026-08-08')] #filtra so na janela de 2026
                 if dia.empty:
                     continue
                 if "sentido_label" in dia.columns:
@@ -690,7 +693,7 @@ def main():
     parser.add_argument("--input",  required=True, help="Caminho do diretorio de arquivos separados por mes e ja processados")
     parser.add_argument("--tipo", default="BU", help="Tipo do arquivo(GT,BU OU BE)")
     parser.add_argument("--sep",    default=",",   help="Delimitador (padrão: ',')")
-    parser.add_argument("--output", default="relatorio_eda_BUI_chunks", help="Pasta de saída")
+    parser.add_argument("--output", required=True, help="Pasta de saída")
     args = parser.parse_args()
 
     out = Path(args.output)
@@ -700,9 +703,9 @@ def main():
     df = load_data_spec(args.input, cols_use=cols_use,tipo=args.tipo,sep=args.sep)
 
     # secao_visao_geral(df, out)
-    # secao_valores(out)
-    #secao_temporal(input,out)
-    # secao_entidades(input,out)
+    secao_valores(input,out)
+    secao_temporal(input,out)
+    secao_entidades(input,out)
     secao_sentido_integracoes(input,out)
 
     print(f"\n{'═'*60}")

@@ -87,9 +87,9 @@ def date_formatter(df:pd.DataFrame,tipo:str):
     if tipo=="BE" or tipo=="BU":
         for col in ["data_transacao", "data_processamento"]:
             if col in df.columns:
-                df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+                df[col] = pd.to_datetime(df[col], dayfirst=False, errors="coerce")
             if "data_ordem" in df.columns:
-                df["data_ordem"]=pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+                df["data_ordem"]=pd.to_datetime(df["data_ordem"], dayfirst=False, errors="coerce")
     return df
 # ════════════════════════════════════════════════════════════════════════════
 # 2. VISÃO GERAL
@@ -152,7 +152,8 @@ def secao_valores(input:Path,out: Path):
         "vl_linha",
         "vl_trans",
         "vl_subsidio",
-        "pct_subsidio"
+        "pct_subsidio",
+        "data_transacao"
     ] #colunas que vamos ler dos arquivos do mes
 
 
@@ -248,6 +249,7 @@ def secao_temporal(input:Path,out: Path):
         "vl_subsidio",
         "data_processamento",
         "data_transacao",
+        "sindicato"
     ]#colunas p ler
     with os.scandir(input) as files:
         for file in files:
@@ -312,7 +314,6 @@ def secao_temporal(input:Path,out: Path):
     hora_cnt = hora_cnt.sort_index()
     hora_sub_sum = hora_sub_sum.sort_index()
 
-    hora_sub_media = hora_sub_sum / hora_cnt
     # Transações por hora do dia
     fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
     axes[0].bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
@@ -321,11 +322,11 @@ def secao_temporal(input:Path,out: Path):
     axes[0].set_ylabel("Nº de Transações")
     axes[0].set_xticks(range(0, 24))
 
-    # Subsídio médio por hora
-    axes[1].plot(hora_sub_media.index, hora_sub_media.values, marker="o", color="coral")
-    axes[1].set_title("Subsídio Médio por Hora do Dia")
+    # Subsídio total por hora
+    axes[1].plot(hora_sub_sum.index, hora_sub_sum.values, marker="o", color="coral")
+    axes[1].set_title("Subsídio Total por Hora do Dia")
     axes[1].set_xlabel("Hora")
-    axes[1].set_ylabel("Subsídio Médio (R$)")
+    axes[1].set_ylabel("Subsídio Total (R$)")
     axes[1].set_xticks(range(0, 24))
 
     plt.suptitle("Padrão Temporal das Transações", fontweight="bold")
@@ -377,7 +378,7 @@ def secao_temporal(input:Path,out: Path):
     diario["subsidio_total"] = diario["data_dia"].map(diario_subs)
 
     diario = diario.sort_values("data_dia")
-    diario["data_dia"]=pd.to_datetime(diario["data_dia"],dayfirst=True)
+    diario["data_dia"]=pd.to_datetime(diario["data_dia"],dayfirst=False)
 
     fig, ax1 = plt.subplots(figsize=FIGSIZE_WIDE)
     ax1.bar(diario["data_dia"], diario["transacoes"], alpha=0.6, label="Transações")
@@ -450,6 +451,7 @@ def secao_entidades(input:Path,out: Path):
         "dia_semana",
         "sindicato",
         "num_carro",
+        "data_transacao",
     ]#colunas a ler
     operadora_cnt = pd.Series(dtype=np.int64)
     linha_cnt = pd.Series(dtype=np.int64)
@@ -601,7 +603,7 @@ def main():
     df = load_data_spec(args.input, cols_use=cols_use,tipo=args.tipo,sep=args.sep)
 
     # secao_visao_geral(df, out)
-    # secao_valores(input,out)
+    secao_valores(input,out)
     secao_temporal(input,out)
     secao_entidades(input,out)
 

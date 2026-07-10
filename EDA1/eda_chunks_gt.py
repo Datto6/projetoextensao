@@ -89,7 +89,7 @@ def date_formatter(df:pd.DataFrame,tipo:str):
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
             if "data_ordem" in df.columns:
-                df["data_ordem"]=pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+                df["data_ordem"]=pd.to_datetime(df["data_ordem"], dayfirst=False, errors="coerce")
     return df
 # ════════════════════════════════════════════════════════════════════════════
 # 2. VISÃO GERAL
@@ -419,7 +419,7 @@ def main():
     input=Path(args.input)
     # secao_visao_geral(df, out)
     secao_temporal(input,out)
-    # secao_entidades(input,out)
+    secao_entidades(input,out)
 
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")
