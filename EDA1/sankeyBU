@@ -1,0 +1,48 @@
+Fluxo,Origem,Destino,Quantidade
+Não Identificado (1) -> barca (2),Não Identificado (1),barca (2),8
+Não Identificado (1) -> metro (2),Não Identificado (1),metro (2),3
+Não Identificado (1) -> onibus (2),Não Identificado (1),onibus (2),38
+Não Identificado (1) -> trem (2),Não Identificado (1),trem (2),12
+Não Identificado (1) -> van (2),Não Identificado (1),van (2),65
+Não Identificado (2) -> trem (3),Não Identificado (2),trem (3),1
+barca (0) -> barca (1),barca (0),barca (1),41
+barca (0) -> metro (1),barca (0),metro (1),758
+barca (0) -> onibus (1),barca (0),onibus (1),564
+barca (0) -> trem (1),barca (0),trem (1),2
+barca (0) -> van (1),barca (0),van (1),383
+barca (1) -> barca (2),barca (1),barca (2),5
+metro (0) -> Não Identificado (1),metro (0),Não Identificado (1),25
+metro (0) -> barca (1),metro (0),barca (1),9236
+metro (0) -> metro (1),metro (0),metro (1),654
+metro (0) -> onibus (1),metro (0),onibus (1),198266
+metro (0) -> trem (1),metro (0),trem (1),156273
+metro (0) -> van (1),metro (0),van (1),17702
+metro (1) -> Não Identificado (2),metro (1),Não Identificado (2),1
+metro (1) -> barca (2),metro (1),barca (2),18
+metro (1) -> onibus (2),metro (1),onibus (2),1386
+metro (1) -> trem (2),metro (1),trem (2),1252
+metro (1) -> van (2),metro (1),van (2),49
+onibus (0) -> Não Identificado (1),onibus (0),Não Identificado (1),96
+onibus (0) -> barca (1),onibus (0),barca (1),1960
+onibus (0) -> metro (1),onibus (0),metro (1),62742
+onibus (0) -> onibus (1),onibus (0),onibus (1),595825
+onibus (0) -> trem (1),onibus (0),trem (1),11527
+onibus (0) -> van (1),onibus (0),van (1),26823
+onibus (1) -> metro (2),onibus (1),metro (2),2
+onibus (1) -> onibus (2),onibus (1),onibus (2),261
+onibus (1) -> van (2),onibus (1),van (2),3
+trem (0) -> Não Identificado (1),trem (0),Não Identificado (1),2
+trem (0) -> barca (1),trem (0),barca (1),340
+trem (0) -> metro (1),trem (0),metro (1),59881
+trem (0) -> onibus (1),trem (0),onibus (1),106984
+trem (0) -> trem (1),trem (0),trem (1),746
+trem (0) -> van (1),trem (0),van (1),3418
+trem (1) -> onibus (2),trem (1),onibus (2),1
+trem (1) -> trem (2),trem (1),trem (2),4
+van (0) -> Não Identificado (1),van (0),Não Identificado (1),3
+van (0) -> barca (1),van (0),barca (1),273
+van (0) -> metro (1),van (0),metro (1),6047
+van (0) -> onibus (1),van (0),onibus (1),144664
+van (0) -> trem (1),van (0),trem (1),758
+van (0) -> van (1),van (0),van (1),20765
+van (1) -> onibus (2),van (1),onibus (2),1
