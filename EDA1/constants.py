@@ -8,6 +8,10 @@ def pega_dict_processado(tipo: str) -> dict:
     if tipo=="BE": return DTYPES_BE
     if tipo=="BU": return DTYPES_BU
     if tipo=="GT": return DTYPES_GT
+
+MINIMO_ENTRADAS_GT=10000
+MINIMO_ENTRADAS_BU=50*1000
+MINIMO_ENTRADAS_BE=50*1000
 COLUNAS_BE={
     "Nº Cartão":               "num_cartao",
     "Descrição da Aplicação":  "descricao_aplicacao",

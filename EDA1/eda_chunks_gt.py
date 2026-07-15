@@ -38,10 +38,10 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import LabelEncoder
 from constants import *
+from utility import txt_faltantes
 warnings.filterwarnings("ignore")
+import duckdb
 
 # ── Estilo global ────────────────────────────────────────────────────────────
 sns.set_theme(style="whitegrid", palette="muted", font_scale=1.05)
@@ -95,28 +95,38 @@ def date_formatter(df:pd.DataFrame,tipo:str):
 # 2. VISÃO GERAL
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_visao_geral(df: pd.DataFrame, out: Path):
+def secao_visao_geral(input:Path,out: Path):
     print("\n[1/7] Visão Geral")
 
+    result = duckdb.sql(f"""
+    SELECT
+        COUNT(*) AS total_transacoes,
+        COUNT(DISTINCT cartao_hash) AS cartoes_unicos,
+        COUNT(DISTINCT linha) AS linhas_unicas,
+        COUNT(DISTINCT operadora) AS operadoras_unicas,
+        COUNT(DISTINCT sindicato) AS sindicatos_unicos
+    FROM read_csv(
+        '{input}/*.csv',
+        all_varchar=true,
+        header=true
+    )
+    """).fetchone()
+
     resumo = {
-        "Total de transações":         len(df),
-        "Cartões únicos":              df["num_cartao"].nunique() if "num_cartao" in df else "—",
-        "Linhas únicas":               df["linha"].nunique() if "linha" in df else "—",
-        "Operadoras únicas":           df["operadora"].nunique() if "operadora" in df else "—",
-        "Sindicatos únicos":           df["sindicato"].nunique() if "sindicato" in df else "—",
+        "Total de transações": result[0],
+        "Hashes únicos": result[1],
+        "Linhas únicas": result[2],
+        "Operadoras únicas": result[3],
+        "Sindicatos únicos": result[4],
     }
 
-    print("\n  ── Resumo Executivo ──")
-    for k, v in resumo.items():
-        print(f"  {k:<35} {v}")
+    # Exportar resumo para TXT
+    with open(out / "01_resumo_executivo.txt", "w", encoding="utf-8") as f:
+        f.write("RESUMO EXECUTIVO\n")
+        f.write("=" * 50 + "\n\n")
 
-    # Tabela de nulos
-    nulos = df.isnull().sum()
-    nulos = nulos[nulos > 0]
-    if not nulos.empty:
-        print("\n  ── Campos com valores ausentes ──")
-        for col, n in nulos.items():
-            print(f"  {col:<30} {n:>6} ({n/len(df)*100:.1f}%)")
+        for k, v in resumo.items():
+            f.write(f"{k:<35} {v}\n")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -129,6 +139,7 @@ def secao_temporal(input:Path,out: Path):
     diario_trans = {}
     diario_subs = {}
     all_latencies = []
+    modal_cnt=pd.Series(dtype=np.int64)
     dia_semana_cnt = pd.Series(dtype=np.int64)
     dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
     df_latencia_sum = pd.DataFrame(columns=dias,dtype="float64")
@@ -170,6 +181,8 @@ def secao_temporal(input:Path,out: Path):
                 if "sindicato" in dia.columns:
                     dia.rename(columns={"sindicato":"modal"},inplace=True)
                     dia["modal"]=dia["modal"].map(MAP_MODAL)
+                    cnt=dia["modal"].value_counts()
+                    modal_cnt=modal_cnt.add(cnt,fill_value=0)
                 if all(c in dia.columns for c in ["latencia", "dia_semana"]):
                     ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
                     nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
@@ -198,6 +211,7 @@ def secao_temporal(input:Path,out: Path):
                         df_latencia_sum.loc[modal] += lat_sum
                         df_latencia_cnt.loc[modal] += lat_cnt
     hora_cnt = hora_cnt.sort_index()
+
     # Transações por hora do dia
     fig, ax = plt.subplots(figsize=FIGSIZE_WIDE)
     ax.bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
@@ -222,26 +236,13 @@ def secao_temporal(input:Path,out: Path):
     plt.savefig(out / "03b_transacoes_dia_semana.png", dpi=150, bbox_inches="tight")
     plt.close()
 
-    #Latencia Media por Dia de Semana, separado por modal
-    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
-    fig, axes=plt.subplots(2, 2, figsize=(18, 7))
-    for ax,(index,row) in zip(axes.flat,df_latencia_sum.iterrows()):
-        lat_mean = row / df_latencia_cnt.loc[index]
-        ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
-        ax.set_title(f"{index}")
-        ax.set_ylabel("Latência Média em Horas")
+    #pie chart modais
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.pie(modal_cnt.values, labels=modal_cnt.index, autopct="%1.1f%%",
+                startangle=90, colors=sns.color_palette("pastel"))
+    ax.set_title("Distribuição por Modal")
     plt.tight_layout()
-    plt.suptitle("Latência Média por Modal", fontweight="bold")
-    plt.savefig(out / "03f_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    
-    fig, ax = plt.subplots(figsize=(8, 4))
-    lat_mean = df_latencia_sum.loc["trem"]/ df_latencia_cnt.loc["trem"]
-    ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
-    ax.set_title(f"trem")
-    ax.set_ylabel("Latência Média em Horas")
-    plt.tight_layout()
-    plt.savefig(out / "03g_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
+    plt.savefig(out / "04d_pie_aplicacao.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     # Série diária (se houver mais de 1 dia)
@@ -270,6 +271,33 @@ def secao_temporal(input:Path,out: Path):
     fig.legend(loc="upper left", bbox_to_anchor=(0.1, 0.95))
     plt.tight_layout()
     plt.savefig(out / "03c_serie_diaria.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    diario_dict = diario.set_index("data_dia")["transacoes"].to_dict() #cada dia vira um indexo, com seu valor associado
+    txt_faltantes(out=out,data_ini='2026-01-01', data_fim='2026-07-06',diario=diario_dict,minimo=MINIMO_ENTRADAS_GT) #cria arquivo txt com dias faltantes
+
+    #Latencia Media por Dia de Semana, separado por modal
+    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+    fig, axes=plt.subplots(2, 2, figsize=(18, 7))
+    for ax,(index,row) in zip(axes.flat,df_latencia_sum.iterrows()):
+        lat_mean = row / df_latencia_cnt.loc[index]
+        ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
+        ax.set_title(f"{index}")
+        ax.set_ylabel("Latência Média em Horas")
+    plt.tight_layout()
+    plt.suptitle("Latência Média por Modal", fontweight="bold")
+    plt.savefig(out / "03f_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+    nome_modal = df_latencia_sum.index[-1]
+    faltante = df_latencia_sum.loc[nome_modal]
+    contagem = df_latencia_cnt.loc[nome_modal]
+    fig, ax = plt.subplots(figsize=(8, 4))
+    lat_mean = faltante / contagem 
+    ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
+    ax.set_title(nome_modal)
+    ax.set_ylabel("Latência Média em Horas")
+    plt.tight_layout()
+    plt.savefig(out / "03g_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     # Latência de processamento
@@ -426,9 +454,9 @@ def main():
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     input=Path(args.input)
-    # secao_visao_geral(df, out)
+    secao_visao_geral(input, out)
     # secao_temporal(input,out)
-    secao_entidades(input,out)
+    #secao_entidades(input,out)
 
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")

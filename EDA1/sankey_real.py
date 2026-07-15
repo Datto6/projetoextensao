@@ -177,7 +177,7 @@ import re
 # ==========================================
 def plotar_sankey_estruturado(df_final:pd.DataFrame, caminho_saida_csv:Path,sep:str=","):
     # Salvar em CSV estruturado por ponto e vírgula
-    df_final.to_csv(caminho_saida_csv, index=False, sep=',')
+    df_final.to_csv(f"{caminho_saida_csv}.csv", index=False, sep=',')
     print(f"\n[SUCESSO] Base de fluxo exportada para: {caminho_saida_csv}")
     
     # Mapeamento numérico de nós exigido pelo Plotly
@@ -263,6 +263,7 @@ def plotar_sankey_estruturado(df_final:pd.DataFrame, caminho_saida_csv:Path,sep:
         height=800 # Aumentar a altura ajuda a afastar os nós se o volume de transações for maciço
     )
     fig.show()
+    fig.write_image(f"{caminho_saida_csv}.png")
 
 # ==========================================
 # Execução Principal
@@ -270,7 +271,7 @@ def plotar_sankey_estruturado(df_final:pd.DataFrame, caminho_saida_csv:Path,sep:
 if __name__ == "__main__":
     start_time = time.perf_counter()
     parser = argparse.ArgumentParser(
-        description="EDA — Bilhete Único Intermunicipal (BUI)"
+        description="Argumentos de Sankey"
     )
     parser.add_argument("--input",  required=True, help="Caminho do diretorio de arquivos separados por mes e ja processados")
     parser.add_argument("--sep",    default=",",   help="Delimitador (padrão: ',')")

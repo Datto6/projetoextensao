@@ -41,6 +41,7 @@ import seaborn as sns
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import LabelEncoder
 from constants import * 
+from utility import txt_faltantes
 warnings.filterwarnings("ignore")
 
 # ── Estilo global ────────────────────────────────────────────────────────────
@@ -347,28 +348,6 @@ def secao_temporal(input:Path,out: Path):
     plt.savefig(out / "03b_transacoes_dia_semana.png", dpi=150, bbox_inches="tight")
     plt.close()
 
-    #Latencia Media por Dia de Semana, separado por modal
-    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
-    fig, axes=plt.subplots(2, 2, figsize=(18, 7))
-    for ax,(index,row) in zip(axes.flat,df_latencia_sum.iterrows()):
-        lat_mean = row / df_latencia_cnt.loc[index]
-        ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
-        ax.set_title(f"{index}")
-        ax.set_ylabel("Latência Média em Horas")
-    plt.tight_layout()
-    plt.suptitle("Latência Média por Modal", fontweight="bold")
-    plt.savefig(out / "03f_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    
-    fig, ax = plt.subplots(figsize=(8, 4))
-    lat_mean = df_latencia_sum.loc["trem"]/ df_latencia_cnt.loc["trem"]
-    ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
-    ax.set_title(f"trem")
-    ax.set_ylabel("Latência Média em Horas")
-    plt.tight_layout()
-    plt.savefig(out / "03g_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
-    plt.close()
-
     # Série diária (se houver mais de 1 dia)
     diario = pd.DataFrame({
         "data_dia": list(diario_trans.keys()),
@@ -409,6 +388,34 @@ def secao_temporal(input:Path,out: Path):
     plt.savefig(out / "03c_serie_diaria.png", dpi=150, bbox_inches="tight")
     plt.close()
 
+    diario_dict = diario.set_index("data_dia")["transacoes"].to_dict() #cada dia vira um indexo, com seu valor associado
+    txt_faltantes(out=out,data_ini='2026-01-01', data_fim='2026-07-06',diario=diario_dict,minimo=MINIMO_ENTRADAS_BE) #cria arquivo txt com dias faltantes
+    
+    #Latencia Media por Dia de Semana, separado por modal
+    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+    fig, axes=plt.subplots(2, 2, figsize=(18, 7))
+    for ax,(index,row) in zip(axes.flat,df_latencia_sum.iterrows()):
+        lat_mean = row / df_latencia_cnt.loc[index]
+        ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
+        ax.set_title(f"{index}")
+        ax.set_ylabel("Latência Média em Horas")
+    plt.tight_layout()
+    plt.suptitle("Latência Média por Modal", fontweight="bold")
+    plt.savefig(out / "03f_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+    nome_modal = df_latencia_sum.index[-1]
+    faltante = df_latencia_sum.loc[nome_modal]
+    contagem = df_latencia_cnt.loc[nome_modal]
+    fig, ax = plt.subplots(figsize=(8, 4))
+    lat_mean = faltante / contagem 
+    ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
+    ax.set_title(nome_modal)
+    ax.set_ylabel("Latência Média em Horas")
+    plt.tight_layout()
+    plt.savefig(out / "03g_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    
     # Latência de processamento
     lat_pos = pd.concat(all_latencies, ignore_index=True)
 
