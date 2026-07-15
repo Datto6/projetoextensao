@@ -377,9 +377,18 @@ def secao_entidades(input:Path,out: Path):
     
     # Transacoes top 15 aplicacoes
     fig, ax = plt.subplots(figsize=(10, 6))
-    top_bar(valores["aplicacao"],f"Top 15 — aplicacao (nº transações)","Nº Transações",ax)
+    top_bar(valores["aplicacao"],f"Top 15 — aplicação (nº transações)","Nº Transações",ax)
     plt.tight_layout()
     plt.savefig(out / "04b_transacoes_por_aplicacao.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+    #pie chart top 15 aplicacoes
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.pie(valores["aplicacao"].values, labels=valores["aplicacao"].index, autopct="%1.1f%%",
+                startangle=90, colors=sns.color_palette("pastel"))
+    ax.set_title("Distribuição por Aplicação")
+    plt.tight_layout()
+    plt.savefig(out / "04d_pie_aplicacao.png", dpi=150, bbox_inches="tight")
     plt.close()
     # Exportar tabela resumo por linha, so que so GT
     linhas = transacoes.keys()
@@ -418,7 +427,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     input=Path(args.input)
     # secao_visao_geral(df, out)
-    secao_temporal(input,out)
+    # secao_temporal(input,out)
     secao_entidades(input,out)
 
     print(f"\n{'═'*60}")
