@@ -454,6 +454,7 @@ def main():
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     input=Path(args.input)
+    
     secao_visao_geral(input, out)
     # secao_temporal(input,out)
     #secao_entidades(input,out)

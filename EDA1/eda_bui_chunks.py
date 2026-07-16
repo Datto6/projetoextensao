@@ -42,6 +42,7 @@ from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import LabelEncoder
 from constants import *
 from utility import txt_faltantes
+import duckdb
 warnings.filterwarnings("ignore")
 
 # ── Estilo global ────────────────────────────────────────────────────────────
@@ -93,43 +94,105 @@ def date_formatter(df:pd.DataFrame,tipo:str):
 # ════════════════════════════════════════════════════════════════════════════
 # 2. VISÃO GERAL
 # ════════════════════════════════════════════════════════════════════════════
-
-def secao_visao_geral(df: pd.DataFrame, out: Path):
+def secao_visao_geral(input:Path,out: Path):
     print("\n[1/7] Visão Geral")
-
+    #cast as double eh porque tudo foi lido como char, de resto eh contar distintos e autoexplicativo
+    result = duckdb.sql(f"""
+    SELECT
+        COUNT(*) AS total_transacoes,
+        COUNT(DISTINCT cartao_hash) AS cartoes_unicos,
+        COUNT(DISTINCT linha) AS linhas_unicas,
+        COUNT(DISTINCT operadora) AS operadoras_unicas,
+        COUNT(DISTINCT sindicato) AS sindicatos_unicos,
+        SUM(CAST(vl_linha AS DOUBLE)) AS total_vl_linha,
+        SUM(CAST(vl_trans AS DOUBLE)) AS total_vl_trans,
+        SUM(CAST(vl_subsidio AS DOUBLE)) AS total_vl_subsidio,
+        AVG(CAST(pct_subsidio AS DOUBLE)) AS media_pct_subsidio,
+        SUM(CAST(qtde_integracoes AS INTEGER) > 0) AS com_integracoes
+    FROM read_csv(
+        '{input}/*.csv',
+        all_varchar=true,
+        header=true
+    )
+    """).fetchone()
+    #fetchone pega a unica row de saida do query
     resumo = {
-        "Total de transações":         len(df),
-        "Cartões únicos":              df["num_cartao"].nunique() if "num_cartao" in df else "—",
-        "Linhas únicas":               df["linha"].nunique() if "linha" in df else "—",
-        "Operadoras únicas":           df["operadora"].nunique() if "operadora" in df else "—",
-        "Sindicatos únicos":           df["sindicato"].nunique() if "sindicato" in df else "—",
-        "Total Vl Linha (R$)":         f"{df['vl_linha'].sum():,.2f}" if "vl_linha" in df else "—",
-        "Total Vl Trans (R$)":         f"{df['vl_trans'].sum():,.2f}" if "vl_trans" in df else "—",
-        "Total Vl Subsídio (R$)":      f"{df['vl_subsidio'].sum():,.2f}" if "vl_subsidio" in df else "—",
-        "Média % Subsídio":            f"{df['pct_subsidio'].mean():.1f}%" if "pct_subsidio" in df else "—",
-        "Com integrações (>0)":        int((df["qtde_integracoes"] > 0).sum()) if "qtde_integracoes" in df else "—",
-    }
+        "Total de transações": result[0],
+        "Hashes únicos": result[1],
+        "Linhas únicas": result[2],
+        "Operadoras únicas": result[3],
+        "Sindicatos únicos": result[4],
+        "Total Vl Linha (R$)":    f"{result[5]:,.2f}",
+        "Total Vl Trans (R$)":    f"{result[6]:,.2f}",
+        "Total Vl Subsídio (R$)": f"{result[7]:,.2f}",
+        "Média % Subsídio":       f"{result[8]:.1f}%",
+        "Com integrações (>0)":   int(result[9]),
+    }    
 
-    print("\n  ── Resumo Executivo ──")
-    for k, v in resumo.items():
-        print(f"  {k:<35} {v}")
+    nulos = duckdb.sql(f"""
+        SELECT
+            SUM(vl_linha IS NULL) AS vl_linha,
+            SUM(vl_trans IS NULL) AS vl_trans,
+            SUM(vl_subsidio IS NULL) AS vl_subsidio,
+            SUM(pct_subsidio IS NULL) AS pct_subsidio,
+            SUM(qtde_integracoes IS NULL) AS qtde_integracoes
+        FROM read_csv(
+            '{input}/*.csv',
+            all_varchar=true,
+            header=true
+        )
+    """).fetchone()
 
-    # Tabela de nulos
-    nulos = df.isnull().sum()
-    nulos = nulos[nulos > 0]
-    if not nulos.empty:
-        print("\n  ── Campos com valores ausentes ──")
-        for col, n in nulos.items():
-            print(f"  {col:<30} {n:>6} ({n/len(df)*100:.1f}%)")
+    colunas = [
+        "vl_linha",
+        "vl_trans",
+        "vl_subsidio",
+        "pct_subsidio",
+        "qtde_integracoes"
+    ]
 
-    # Estatísticas descritivas numéricas
-    cols=list(set(["vl_linha","vl_trans","vl_subsidio","pct_subsidio","qtde_integracoes"]) & set(df.columns)) #intersecao entre colunas que queremos e coluna na df
+    # Exportar resumo para TXT
+    with open(out / "01_resumo_executivo.txt", "w", encoding="utf-8") as f:
+        f.write("RESUMO EXECUTIVO\n")
+        f.write("=" * 50 + "\n\n")
 
-    stats = df[cols].describe().round(2)
-    print(f"\n{stats.to_string()}")
+        for k, v in resumo.items():
+            f.write(f"{k:<35} {v}\n")
+        f.write("\n── Campos com valores ausentes ──")
+        for col, n in zip(colunas, nulos):
+            if n > 0:
+                print(f"{col:<30} {n}\n")
 
+    #Fazer estatisticas descritivas, tal qual o describe de um df normal.
+    colunas=colunas.pop(-1)
+    query = f"""
+        WITH dados AS (SELECT *FROM read_csv('{input}/*.csv',all_varchar=true,header=true))
+
+        SELECT 'count' AS estatistica,{",".join([f"COUNT({col}) AS {col}" for col in colunas])} FROM dados
+        UNION ALL
+        
+        SELECT'mean',{",".join([f"AVG(CAST({col} AS DOUBLE))" for col in colunas])} FROM dados
+        UNION ALL
+        
+        SELECT 'std',{",".join([f"STDDEV(CAST({col} AS DOUBLE))" for col in colunas])} FROM dados
+        UNION ALL
+
+        SELECT'min',{",".join([f"MIN(CAST({col} AS DOUBLE))" for col in colunas])} FROM dados
+        UNION ALL
+
+        SELECT'25%',{",".join([f"QUANTILE_CONT(CAST({col} AS DOUBLE), 0.25)" for col in colunas])} FROM dados
+        UNION ALL
+
+        SELECT'50%', {",".join([f"MEDIAN(CAST({col} AS DOUBLE))" for col in colunas])} FROM dados
+        UNION ALL
+
+        SELECT'75%',{",".join([f"QUANTILE_CONT(CAST({col} AS DOUBLE), 0.75)" for col in colunas])} FROM dados
+        UNION ALL
+
+        SELECT'max', {",".join([f"MAX(CAST({col} AS DOUBLE))" for col in colunas])} FROM dados
+        """
+    stats = duckdb.sql(query).fetchdf().round(2) #pegar resultado da query como df, exportar para csv, arredondar primeiro
     stats.to_csv(out / "01_estatisticas_descritivas.csv")
-
 
 # ════════════════════════════════════════════════════════════════════════════
 # 3. DISTRIBUIÇÕES DE VALORES
@@ -386,7 +449,7 @@ def secao_temporal(input:Path,out: Path):
     plt.close()
 
     diario_dict = diario.set_index("data_dia")["transacoes"].to_dict() #cada dia vira um indexo, com seu valor associado
-    txt_faltantes(out=out,data_ini='2026-01-01', data_fim='2026-07-06',diario=diario_dict,minimo=MINIMO_ENTRADAS_BE) #cria arquivo txt com dias faltantes
+    txt_faltantes(out=out,data_ini='2026-01-01', data_fim='2026-07-06',diario=diario_dict,minimo=MINIMO_ENTRADAS_BU) #cria arquivo txt com dias faltantes
 
     #Latencia Media por Dia de Semana, separado por modal
     nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
@@ -708,13 +771,12 @@ def main():
     input=Path(args.input)
     out.mkdir(parents=True, exist_ok=True)
     cols_use=pega_dict(args.tipo)
-    df = load_data_spec(args.input, cols_use=cols_use,tipo=args.tipo,sep=args.sep)
 
-    # secao_visao_geral(df, out)
-    secao_valores(input,out)
-    secao_temporal(input,out)
-    secao_entidades(input,out)
-    secao_sentido_integracoes(input,out)
+    secao_visao_geral(input, out)
+    # secao_valores(input,out)
+    # secao_temporal(input,out)
+    # secao_entidades(input,out)
+    # secao_sentido_integracoes(input,out)
 
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")
