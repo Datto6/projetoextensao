@@ -1,9 +1,11 @@
-import os,sys,argparse,time
+import os,sys,argparse,time,shutil
 from testecurl import pegar_dados
 from pathlib import Path
 import re
 from datetime import date,timedelta
+from merger import mergerMes
 def is_syntax_valid(filepath: str) -> bool:
+    #Determina se sintasse de um filepath está correto
     try:
         # resolve() will trigger an OSError if the path syntax contains illegal characters
         Path(filepath).resolve(strict=False)
@@ -12,6 +14,7 @@ def is_syntax_valid(filepath: str) -> bool:
         return False
 
 def tratar(argumentos, arg_esp):
+    #Retorna True se argumento específico está de acordo com os padrões aceitos pelo programa
     valor_considerado=getattr(argumentos,arg_esp)
     mapa_correto={
         "data_inicio":"\\d{4}/\\d{2}/\\d{2}",  #formato yyyy/mm/dd
@@ -29,6 +32,7 @@ def tratar(argumentos, arg_esp):
 
 def main():
     start_time=time.perf_counter()
+    #Definição de argumentos de entrada
     parser = argparse.ArgumentParser(
         description="Entrada para EDA sobre dados"
     )
@@ -38,7 +42,7 @@ def main():
     parser.add_argument("--output", required=True, help="Pasta de saída do EDA")
     parser.add_argument("--input", required=True, help="Pasta de entrada de dados a serem analisados")
     args = parser.parse_args()
-
+    #Rotina de tratamento de input básico
     nomes_args=["data_inicio","data_fim","sep","output","input"]
     for arg in nomes_args:
         if not tratar(args,arg):
@@ -61,15 +65,37 @@ def main():
         print("Data inválida. Checar meses, anos ou dias invalidos, e rodar de novo. ")
         sys.exit()
     delta = timedelta(days=1)
+    path_input=Path(input)
+    downloaded=[]
+
+    #Rotina de download de arquivos
     for i in tipos:
+        path=path_input/i #input/tipo
         current_date = start_date
         while current_date <= end_date:
             ano=current_date.year
             mes=current_date.month
             dia=current_date.day
             padrao=f"TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}" #padrao pra pegar os dados
-            pegar_dados(padrao,input,i)
+            try:
+                pegar_dados(padrao,path,i)
+            except:
+                shutil.rmtree(path) #caso de erro, apagar arquivos do tipo
+                print(f"Erro de leitura no dia TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}, apagando diretorio desse tipo ")
+                break
             current_date += delta
+        downloaded.append(i) #adiciono esse tipo aos tipos que foram baixados
+        organizado=Path()
+        mergerMes(path,args.output,args.tipo,args.sep)
+    path_saida=Path(args.output)
+
+    #chamadas de funcoes de gerar os graficos
+    if "BE" in downloaded:
+        EDA_BE(path_input/"BE",path_saida/"BE","BE",",")
+    if "BU" in downloaded:
+        EDA_BU(path_input/"BU",path_saida/"BU",",")
+    if "GRATUIDADE" in downloaded:
+        EDA_GT(pathinput/"GT",path_saida/"GT",",")
     end_time = time.perf_counter()
     execution_time = end_time - start_time
     print(f"Execution time: {execution_time:.6f} seconds")

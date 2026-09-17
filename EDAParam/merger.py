@@ -91,12 +91,12 @@ def load_data_spec(path: str, cols_use:dict, tipo:str,sep: str=";"):
         print(f"{path} eh um arquivo em branco.")
     return pd.DataFrame()
 
-def separar(input: Path, out: Path,tipo:str):
+def separar(input: Path, out: Path,tipo:str,sep:str):
     files_touched=[]
     empty_files=[]
     with os.scandir(input) as files:
         for file in files:
-            dia = load_data_spec(file.path,pega_dict(tipo),tipo, ";")
+            dia = load_data_spec(file.path,pega_dict(tipo),tipo, sep)
             if dia.empty:
                 empty_files.append(str(file.path))
                 continue #se o dia nao tiver nenhum valor, pulamos essa iteracao
@@ -111,20 +111,12 @@ def separar(input: Path, out: Path,tipo:str):
     print(f"Arquivos adicionados:{files_touched}")
     print(f"Arquivos vazios:{empty_files}")
 
-def main():
+def mergerMes(input,output,tipo,sep):
     start_time = time.perf_counter()
-    parser = argparse.ArgumentParser(
-        description="EDA — Bilhete Único Intermunicipal (BUI)"
-    )
-    parser.add_argument("--input",  required=True, help="Caminho do diretorio")
-    parser.add_argument("--tipo",required=True, help="Tipo do arquivo(GT,BU OU BE)")
-    parser.add_argument("--sep",    default=";",   help="Delimitador (padrão: ';')")
-    parser.add_argument("--output", default="meses_BE_2026", help="Pasta de saída")
-    args = parser.parse_args()
-    input=Path(args.input)
-    out = Path(args.output)
+    input=Path(input)
+    out = Path(output)/tipo
     out.mkdir(parents=True, exist_ok=True)
-    separar(input,out,args.tipo)
+    separar(input,out,tipo,sep)
     print(f"\n{'═'*60}")
     print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")
     print(f"{'═'*60}\n")
@@ -132,7 +124,3 @@ def main():
     end_time = time.perf_counter()
     execution_time = end_time - start_time
     print(f"Execution time: {execution_time:.6f} seconds")
-
-
-if __name__ == "__main__":
-    main()
