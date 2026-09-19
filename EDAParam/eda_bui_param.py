@@ -1,0 +1,742 @@
+"""
+Análise Exploratória de Dados — Bilhete Único Intermunicipal (BUI)
+SETRAM / LIA² / UERJ
+
+Campos:
+    Nº Cartão            — Identificador anonimizado do usuário (LGPD)
+    Descrição da Aplicação — Tipo de benefício/aplicação (100, 115, 400, 450, 820…)
+    Sindicato            — Sindicato ao qual a operadora é filiada
+    Operadora            — Empresa de transporte (anonimizada para Vans)
+    Linha                — Número e nome da linha
+    Nº Carro             — Estação ou veículo onde ocorreu a transação
+    Sentido              — 0=não informado, 1=ida, 2=volta
+    Nº Validador         — Dispositivo de validação
+    Data da Transação    — Data/hora da transação no validador
+    Data do Processamento— Data/hora do processamento
+    Vl Linha             — Tarifa cheia da linha
+    Vl Trans             — Valor cobrado no cartão do usuário
+    Vl Subsídio          — Valor subsidiado pelo estado
+    Qtde Integrações     — Número de integrações na viagem
+    Data da Ordem        — Data da ordem de subsídio
+    Nº Ordem             — Sequencial da ordem de subsídio por modal
+
+Uso:
+    python eda_bui.py --input arquivo.txt [--sep ";"] [--output relatorio/]
+    
+    O arquivo pode ser CSV ou TXT delimitado por ponto-e-vírgula.
+    Os valores monetários devem estar no formato brasileiro: R$ 1.234,56
+"""
+import time 
+import argparse
+import os
+import warnings
+from pathlib import Path
+from collections import defaultdict
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import LabelEncoder
+from constants import *
+from utility import txt_faltantes
+import duckdb
+warnings.filterwarnings("ignore")
+
+# ── Estilo global ────────────────────────────────────────────────────────────
+sns.set_theme(style="whitegrid", palette="muted", font_scale=1.05)
+FIGSIZE_WIDE = (14, 5)
+FIGSIZE_SQ   = (10, 7)
+FIGSIZE_TALL = (12, 8)
+SENTIDO_MAP = {0: "Não informado", 1: "Ida", 2: "Volta"}
+TIPO="BU"
+# ════════════════════════════════════════════════════════════════════════════
+# 1. CARGA E LIMPEZA
+# ════════════════════════════════════════════════════════════════════════════
+
+def load_data_spec(path: str, cols_use:list, tipo:str,sep: str=",",chunksize=None):
+    #auxiliar de load_data que especifica as colunas a serem lidas, e pula a leitura se nao ha nenhuma coluna em comum, usando o dicionario que ja sabemos que existe
+    dicionario_tipo=pega_dict_processado(tipo)
+
+    available_cols = [ #pegar colunas em comum com cols_use e dicionario do tipo
+        col for col in cols_use
+        if col in dicionario_tipo
+    ]
+    dtypes={
+        k:v for k,v in DTYPES_GT.items()
+        if k in available_cols
+    }
+    if available_cols:
+        print(f"Acessando arquivo {path}")
+        return pd.read_csv(
+            path,
+            sep=sep,
+            usecols=available_cols, #estamos na parte ja processada
+            dtype=dtypes,
+            chunksize=chunksize, 
+        )
+    return pd.DataFrame()
+
+def date_formatter(df:pd.DataFrame,tipo:str):
+    if tipo=="GT":
+            for col in ["data_transacao", "data_processamento", "data_ordem"]:
+                if col in df.columns:
+                    df[col] = pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+    if tipo=="BE" or tipo=="BU":
+        for col in ["data_transacao", "data_processamento"]:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+            if "data_ordem" in df.columns:
+                df["data_ordem"]=pd.to_datetime(df["data_ordem"], dayfirst=False, errors="coerce")
+    return df
+# ════════════════════════════════════════════════════════════════════════════
+# 2. VISÃO GERAL
+# ════════════════════════════════════════════════════════════════════════════
+def secao_visao_geral(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
+    print("\n[1/7] Visão Geral")
+    #cast as double eh porque tudo foi lido como char, de resto eh contar distintos e autoexplicativo
+    result = duckdb.sql(f"""
+    SELECT
+        COUNT(*) AS total_transacoes,
+        COUNT(DISTINCT cartao_hash) AS cartoes_unicos,
+        COUNT(DISTINCT linha) AS linhas_unicas,
+        COUNT(DISTINCT operadora) AS operadoras_unicas,
+        COUNT(DISTINCT sindicato) AS sindicatos_unicos,
+        SUM(CAST(vl_linha AS DOUBLE)) AS total_vl_linha,
+        SUM(CAST(vl_trans AS DOUBLE)) AS total_vl_trans,
+        SUM(CAST(vl_subsidio AS DOUBLE)) AS total_vl_subsidio,
+        AVG(CAST(pct_subsidio AS DOUBLE)) AS media_pct_subsidio,
+        SUM(CAST(qtde_integracoes AS INTEGER) > 0) AS com_integracoes
+    FROM read_csv(
+        '{input}/*.csv',
+        all_varchar=true,
+        header=true
+    )
+    """).fetchone()
+    #fetchone pega a unica row de saida do query
+    resumo = {
+        "Total de transações": result[0],
+        "Hashes únicos": result[1],
+        "Linhas únicas": result[2],
+        "Operadoras únicas": result[3],
+        "Sindicatos únicos": result[4],
+        "Total Vl Linha (R$)":    f"{result[5]:,.2f}",
+        "Total Vl Trans (R$)":    f"{result[6]:,.2f}",
+        "Total Vl Subsídio (R$)": f"{result[7]:,.2f}",
+        "Média % Subsídio":       f"{result[8]:.1f}%",
+        "Com integrações (>0)":   int(result[9]),
+    }    
+
+    nulos = duckdb.sql(f"""
+        SELECT
+            SUM(vl_linha IS NULL) AS vl_linha,
+            SUM(vl_trans IS NULL) AS vl_trans,
+            SUM(vl_subsidio IS NULL) AS vl_subsidio,
+            SUM(pct_subsidio IS NULL) AS pct_subsidio,
+            SUM(qtde_integracoes IS NULL) AS qtde_integracoes
+        FROM read_csv(
+            '{input}/*.csv',
+            all_varchar=true,
+            header=true
+        )
+    """).fetchone()
+
+    colunas = [
+        "vl_linha",
+        "vl_trans",
+        "vl_subsidio",
+        "pct_subsidio",
+        "qtde_integracoes"
+    ]
+
+    # Exportar resumo para TXT
+    with open(out / "01_resumo_executivo.txt", "w", encoding="utf-8") as f:
+        f.write("RESUMO EXECUTIVO\n")
+        f.write("=" * 50 + "\n\n")
+
+        for k, v in resumo.items():
+            f.write(f"{k:<35} {v}\n")
+        f.write("\n── Campos com valores ausentes ──")
+        for col, n in zip(colunas, nulos):
+            if n > 0:
+                print(f"{col:<30} {n}\n")
+
+    #Fazer estatisticas descritivas, tal qual o describe de um df normal.
+    colunas=colunas.pop(-1)
+    query = f"""
+        WITH dados AS (SELECT *FROM read_csv('{input}/*.csv',all_varchar=true,header=true))
+
+        SELECT 'count' AS estatistica,{",".join([f"COUNT({col}) AS {col}" for col in colunas])} FROM dados
+        UNION ALL
+        
+        SELECT'mean',{",".join([f"AVG(CAST({col} AS DOUBLE))" for col in colunas])} FROM dados
+        UNION ALL
+        
+        SELECT 'std',{",".join([f"STDDEV(CAST({col} AS DOUBLE))" for col in colunas])} FROM dados
+        UNION ALL
+
+        SELECT'min',{",".join([f"MIN(CAST({col} AS DOUBLE))" for col in colunas])} FROM dados
+        UNION ALL
+
+        SELECT'25%',{",".join([f"QUANTILE_CONT(CAST({col} AS DOUBLE), 0.25)" for col in colunas])} FROM dados
+        UNION ALL
+
+        SELECT'50%', {",".join([f"MEDIAN(CAST({col} AS DOUBLE))" for col in colunas])} FROM dados
+        UNION ALL
+
+        SELECT'75%',{",".join([f"QUANTILE_CONT(CAST({col} AS DOUBLE), 0.75)" for col in colunas])} FROM dados
+        UNION ALL
+
+        SELECT'max', {",".join([f"MAX(CAST({col} AS DOUBLE))" for col in colunas])} FROM dados
+        """
+    stats = duckdb.sql(query).fetchdf().round(2) #pegar resultado da query como df, exportar para csv, arredondar primeiro
+    stats.to_csv(out / "01_estatisticas_descritivas.csv")
+
+# ════════════════════════════════════════════════════════════════════════════
+# 3. DISTRIBUIÇÕES DE VALORES
+# ════════════════════════════════════════════════════════════════════════════
+
+def secao_valores(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
+    print("[2/7] Distribuições de Valores")
+
+    fig, axes = plt.subplots(1, 3, figsize=FIGSIZE_WIDE)
+    cols_val = [("vl_linha", "Vl Linha (R$)"),
+                ("vl_trans", "Vl Trans (R$)"),
+                ("vl_subsidio", "Vl Subsídio (R$)")]
+
+    vl_linha_cnt=pd.Series(dtype=np.int64)
+    vl_trans_cnt=pd.Series(dtype=np.int64)
+    vl_subsidio_cnt=pd.Series(dtype=np.int64)
+    pct_subsidio_cnt=pd.Series(dtype=np.int64)
+
+    cols_in_use=[
+        "vl_linha",
+        "vl_trans",
+        "vl_subsidio",
+        "pct_subsidio",
+        "data_transacao"
+    ] #colunas que vamos ler dos arquivos do mes
+
+
+    with os.scandir(input) as files:
+        for file in files:
+            for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
+                dia=date_formatter(dia,TIPO)
+                dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela de 2026
+                if "vl_linha" in dia.columns:
+                    cnt = dia["vl_linha"].value_counts() 
+                    vl_linha_cnt = vl_linha_cnt.add(cnt, fill_value=0)
+                if "vl_trans" in dia.columns:
+                    cnt = dia["vl_trans"].value_counts()
+                    vl_trans_cnt = vl_trans_cnt.add(cnt, fill_value=0)
+                if "vl_subsidio" in dia.columns:
+                    cnt = dia["vl_subsidio"].value_counts()
+                    vl_subsidio_cnt = vl_subsidio_cnt.add(cnt, fill_value=0)
+                if "pct_subsidio" in dia.columns:
+                    cnt = dia["pct_subsidio"].dropna().clip(0, 100).value_counts()
+                    pct_subsidio_cnt=pct_subsidio_cnt.add(cnt,fill_value=0)
+    valores = { #manter num dict p economizar ficar mais legivel
+    "vl_linha": vl_linha_cnt,
+    "vl_trans": vl_trans_cnt,
+    "vl_subsidio": vl_subsidio_cnt
+    }
+    for ax, (col, label) in zip(axes, cols_val):
+        serie = valores[col].sort_index()
+        max_val = serie.index.astype(float).max() #Pega máximo variável
+        bin_width = 0.5
+
+        bins = np.arange(0, max_val + bin_width, bin_width)
+        # Criar bins p cada valor distinto
+        bin_ids = pd.cut(serie.index.astype(float),bins=bins,include_lowest=True)
+
+        # Somar frequencias dentro de cada bin
+        hist = serie.groupby(bin_ids).sum()
+
+        # Centros de bin p plotar
+        centers = [(interval.left + interval.right)/2 for interval in hist.index]
+
+        ax.bar(centers,hist.values,width=0.5)
+        ax.set_title(label)
+        ax.set_xlabel("R$")
+        ax.set_ylabel("Frequência")
+        ax.xaxis.set_major_formatter(mticker.FormatStrFormatter("%.2f"))
+
+    plt.suptitle("Distribuição dos Valores Monetários", fontweight="bold", y=1.02)
+    plt.tight_layout()
+    plt.savefig(out / "02_distribuicao_valores.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+    # Percentual de subsídio
+    fig, ax = plt.subplots(figsize=(8, 4))
+    serie = pct_subsidio_cnt.sort_index()
+
+    bins = np.arange(0, 102.5, 2.5) #bins de 0 até 100, porque são porcentagem mantemos assim mesmo
+
+    bin_ids = pd.cut(serie.index.astype(float),bins=bins,include_lowest=True) #determina ids de bins
+    hist = serie.groupby(bin_ids).sum() #soma as frequencias dentro de cada bin 
+    centers = [(interval.left + interval.right) / 2
+        for interval in hist.index]
+
+    ax.bar(centers, hist.values, width=2.5)
+    ax.set_title("Distribuição do Percentual de Subsídio (% do Vl Linha)")
+    ax.set_xlabel("% Subsídio")
+    ax.set_ylabel("Frequência")
+    plt.tight_layout()
+    plt.savefig(out / "02c_pct_subsidio.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 4. ANÁLISE TEMPORAL
+# ════════════════════════════════════════════════════════════════════════════
+
+def secao_temporal(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
+    print("[3/7] Análise Temporal")
+    hora_cnt = pd.Series(dtype=np.int64)
+    hora_sub_sum = pd.Series(dtype=np.float64)
+    diario_trans = {}
+    diario_subs = {}
+    all_latencies = []
+    dia_semana_cnt = pd.Series(dtype=np.int64)
+    dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    df_latencia_sum = pd.DataFrame(columns=dias,dtype="float64")
+    df_latencia_cnt= pd.DataFrame(columns=dias,dtype="float64")
+    cols_in_use=[
+        "hora",
+        "vl_subsidio",
+        "dia_semana",
+        "data_dia", 
+        "num_cartao",
+        "data_processamento",
+        "data_transacao",
+        "sindicato"
+    ]#colunas p ler
+    with os.scandir(input) as files:
+        for file in files:
+            for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
+                dia=date_formatter(dia,TIPO)
+                dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela de 2026
+                if dia.empty:
+                    continue
+                if "hora" in dia.columns: #agregando transacoes por hora 
+                    cnt = dia["hora"].value_counts()
+                    hora_cnt = hora_cnt.add(cnt, fill_value=0)
+                    if "vl_subsidio" in dia.columns: #agregando subsidio por hora
+                        sub_sum = dia.groupby("hora")["vl_subsidio"].sum()
+                        hora_sub_sum = hora_sub_sum.add(sub_sum, fill_value=0) #cada hora tem sua soma de subsidio aqui
+                if "dia_semana" in dia.columns: #agregando transacoes por dia de semana
+                    ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+                    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+                    map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
+                    cnt=dia["dia_semana"].map(map_dias).value_counts().reindex(nomes_pt,fill_value=0)
+                    dia_semana_cnt=dia_semana_cnt.add(cnt,fill_value=0)
+
+                if all(c in dia.columns for c in ["data_dia", "num_cartao", "vl_subsidio"]): #so entra se dia tem todas essas colunas
+                    grp = dia.groupby("data_dia").agg(
+                            transacoes=("num_cartao", "count"),
+                            subsidio_total=("vl_subsidio", "sum"))
+                    for data, row in grp.iterrows():
+                        diario_trans[data] = (diario_trans.get(data, 0)+ row["transacoes"])
+                        diario_subs[data] = (diario_subs.get(data, 0.0)+ row["subsidio_total"])
+
+                if all(c in dia.columns for c in ["data_transacao", "data_processamento"]): #criar coluna de latencia
+                    dia["latencia"]=(dia["data_processamento"]- dia["data_transacao"]).dt.total_seconds() / 3600
+                    dia = dia[dia["latencia"] >= 0]
+                    all_latencies.append(dia["latencia"])
+                if "sindicato" in dia.columns:
+                    dia.rename(columns={"sindicato":"modal"},inplace=True)
+                    dia["modal"]=dia["modal"].map(MAP_MODAL)
+                if all(c in dia.columns for c in ["latencia", "dia_semana"]):
+                    ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+                    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+                    map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
+                    for modal,grp in dia.groupby("modal"):#agrupa por modal
+                        grp_modal=grp.groupby("dia_semana")["latencia"] #agrupa por dia de semana, seleciona coluna de latencia
+                        
+                        lat_sum = grp_modal.sum()
+                        lat_cnt = grp_modal.count()
+
+                        lat_sum.index = lat_sum.index.map(map_dias)
+                        lat_cnt.index = lat_cnt.index.map(map_dias)
+
+                        # Make sure every weekday exists
+                        lat_sum = lat_sum.reindex(nomes_pt, fill_value=0)
+                        lat_cnt = lat_cnt.reindex(nomes_pt, fill_value=0)
+
+                        # Adiciona um novo indexo, no caso os indexos sao por modal
+                        if modal not in df_latencia_sum.index:
+                            df_latencia_sum.loc[modal] = 0.0
+
+                        if modal not in df_latencia_cnt.index:
+                            df_latencia_cnt.loc[modal] = 0
+
+                        df_latencia_sum.loc[modal] += lat_sum
+                        df_latencia_cnt.loc[modal] += lat_cnt
+
+    hora_cnt = hora_cnt.sort_index()#quantas transacoes por hora
+
+    hora_sub_sum = hora_sub_sum.sort_index()
+    # Transações por hora do dia
+    fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
+    axes[0].bar(hora_cnt.index, hora_cnt.values, color="steelblue", alpha=0.8)
+    axes[0].set_title("Transações por Hora do Dia")
+    axes[0].set_xlabel("Hora")
+    axes[0].set_ylabel("Nº de Transações")
+    axes[0].set_xticks(range(0, 24))
+
+    # Subsídio total por hora
+    axes[1].plot(hora_sub_sum.index, hora_sub_sum.values, marker="o", color="coral")
+    axes[1].set_title("Subsídio Total por Hora do Dia")
+    axes[1].set_xlabel("Hora")
+    axes[1].set_ylabel("Subsídio Total (R$)")
+    axes[1].set_xticks(range(0, 24))
+
+    plt.suptitle("Padrão Temporal das Transações", fontweight="bold")
+    plt.tight_layout()
+    plt.savefig(out / "03_analise_temporal_hora.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+    # Transações por dia da semana
+    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+    dia_cnt = dia_semana_cnt.reindex(nomes_pt, fill_value=0)
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.bar(dia_cnt.index, dia_cnt.values, color="mediumseagreen", alpha=0.85)
+    ax.set_title("Transações por Dia da Semana")
+    ax.set_xlabel("Dia")
+    ax.set_ylabel("Nº de Transações")
+    plt.tight_layout()
+    plt.savefig(out / "03b_transacoes_dia_semana.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    
+
+    # Série diária (se houver mais de 1 dia)
+    diario = pd.DataFrame({
+        "data_dia": list(diario_trans.keys()),
+        "transacoes": list(diario_trans.values())
+    })
+
+    diario["subsidio_total"] = diario["data_dia"].map(diario_subs)
+
+    diario = diario.sort_values("data_dia")
+    diario["data_dia"]=pd.to_datetime(diario["data_dia"],dayfirst=False)
+
+    fig, ax1 = plt.subplots(figsize=FIGSIZE_WIDE)
+    ax1.bar(diario["data_dia"], diario["transacoes"], alpha=0.6, label="Transações")
+    ax2 = ax1.twinx()
+    ax2.plot(diario["data_dia"], diario["subsidio_total"], color="red",
+                marker="o", linewidth=2, label="Subsídio Total")
+    ax1.set_xlabel("Data- ticks por segunda")
+    ax1.set_ylabel("Nº Transações")
+    ax2.set_ylabel("Subsídio Total (R$)")
+    ax1.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    ax1.tick_params(axis="x", 
+        which="major",
+        bottom=True,      # show bottom ticks
+        length=5,         # tick length in points
+        width=1,          # tick thickness
+        color="black",    # tick color
+        direction="out",
+        rotation=45
+        )   # "out", "in", or "inout")
+    plt.title("Série Diária — Transações")
+    plt.title("Série Diária — Transações e Subsídio")
+    fig.legend(loc="upper left", bbox_to_anchor=(0.1, 0.95))
+    plt.tight_layout()
+    plt.savefig(out / "03c_serie_diaria.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+    diario_dict = diario.set_index("data_dia")["transacoes"].to_dict() #cada dia vira um indexo, com seu valor associado
+    txt_faltantes(out=out,data_ini=data_ini, data_fim=data_fim,diario=diario_dict,minimo=MINIMO_ENTRADAS_BU) #cria arquivo txt com dias faltantes
+
+    #Latencia Media por Dia de Semana, separado por modal
+    nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+    fig, axes=plt.subplots(2, 2, figsize=(18, 7))
+    for ax,(index,row) in zip(axes.flat,df_latencia_sum.iterrows()):
+        lat_mean = row / df_latencia_cnt.loc[index]
+        ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
+        ax.set_title(f"{index}")
+        ax.set_ylabel("Latência Média em Horas")
+    plt.tight_layout()
+    plt.suptitle("Latência Média por Modal", fontweight="bold")
+    plt.savefig(out / "03f_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    
+    nome_modal = df_latencia_sum.index[-1]
+    faltante = df_latencia_sum.loc[nome_modal]
+    contagem = df_latencia_cnt.loc[nome_modal]
+    fig, ax = plt.subplots(figsize=(8, 4))
+    lat_mean = faltante / contagem 
+    ax.bar(lat_mean.index, lat_mean.values, color="mediumseagreen", alpha=0.85)
+    ax.set_title(nome_modal)
+    ax.set_ylabel("Latência Média em Horas")
+    plt.tight_layout()
+    plt.savefig(out / "03g_latencia_media_semana_modal.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+    # Latência de processamento, frequencias
+    lat_pos = pd.concat(all_latencies, ignore_index=True)
+
+    if not lat_pos.empty:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        sns.histplot(lat_pos.clip(upper=lat_pos.quantile(0.99)), bins=40, kde=False, ax=ax, color="orchid")
+        ax.set_title("Latência de Processamento (horas)")
+        ax.set_xlabel("Horas (transação → processamento)")
+        ax.set_ylabel("Frequência")
+        plt.tight_layout()
+        plt.savefig(out / "03d_latencia_processamento.png", dpi=150, bbox_inches="tight")
+        plt.close()
+        print(f"  Latência média: {lat_pos.mean():.1f} h | mediana: {lat_pos.median():.1f} h")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 5. ANÁLISE POR ENTIDADE (Operadora, Linha, Sindicato)
+# ════════════════════════════════════════════════════════════════════════════
+
+def top_bar(series: pd.Series, title: str, xlabel: str, ax, n=15, color="steelblue"):
+    top = series.nlargest(n)
+    top.plot.barh(ax=ax, color=color, alpha=0.85)
+    ax.invert_yaxis()
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+
+
+def secao_entidades(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
+    print("[4/7] Análise por Entidade")
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 7))
+    cols_in_use=[
+        "operadora",
+        "linha", 
+        "vl_linha",
+        "vl_subsidio",
+        "vl_trans",
+        "pct_subsidio",
+        "num_cartao",
+        "dia_semana",
+        "sindicato",
+        "num_carro",
+        "data_transacao"
+    ]#colunas a ler
+    operadora_cnt = pd.Series(dtype=np.int64)
+    linha_cnt = pd.Series(dtype=np.int64)
+    sindicato_cnt = pd.Series(dtype=np.int64)
+    subsidio_operadora = pd.Series(dtype=float) #definindo series especificas para usar para o mes todo
+
+    dia_semana_cnt=pd.Series(dtype=np.int64)#atributos para fazer resumo por linha
+    dia_semana_por_linha = defaultdict(lambda: defaultdict(int)) #dicionario com dicionario dentro
+
+    transacoes = defaultdict(int)
+
+    vl_linha_sum = defaultdict(float)
+    vl_linha_count = defaultdict(int)
+    
+    vl_trans_sum = defaultdict(float)
+    vl_trans_count = defaultdict(int)
+
+    subsidio_total = defaultdict(float)
+
+    pct_sum = defaultdict(float)
+    pct_count = defaultdict(int)#sum e count para fazer medias depois
+
+    cartoes_unicos = defaultdict(set)
+    carros_unicos=defaultdict(set)
+    with os.scandir(input) as files:
+        for file in files:
+            for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
+                dia=date_formatter(dia,TIPO)
+                dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela de 2026
+                if dia.empty:
+                    continue
+                if "operadora" in dia.columns: #transacoes por operadora 
+                    cnt = dia["operadora"].value_counts()
+                    operadora_cnt = operadora_cnt.add(cnt, fill_value=0)
+                if "vl_subsidio" in dia.columns and "operadora" in dia.columns: #contando subsidio por operadora 
+                    sub = dia.groupby("operadora")["vl_subsidio"].sum()
+                    subsidio_operadora = subsidio_operadora.add(sub, fill_value=0)
+                if all(c in dia.columns for c in ["linha", "vl_linha","vl_trans","pct_subsidio","num_cartao","dia_semana"]): #se dia tem todas essas colunas
+                    cnt = dia["linha"].value_counts()
+                    linha_cnt = linha_cnt.add(cnt, fill_value=0) #contando transacoes por linha 
+                    for linha, grp in dia.groupby("linha"):#construcao de resumo por linha
+                        transacoes[linha] += len(grp)
+
+                        vl_linha_sum[linha] += grp["vl_linha"].sum()
+                        vl_linha_count[linha] += grp["vl_linha"].notna().sum()
+
+                        vl_trans_sum[linha] += grp["vl_trans"].sum()
+                        vl_trans_count[linha] += grp["vl_trans"].notna().sum()
+
+                        subsidio_total[linha] += grp["vl_subsidio"].sum()
+
+                        pct_sum[linha] += grp["pct_subsidio"].sum()
+                        pct_count[linha] += grp["pct_subsidio"].notna().sum()
+
+                        cartoes_unicos[linha].update(grp["num_cartao"].dropna()) 
+                        carros_unicos[linha].update(grp["num_carro"].dropna()) #mantem unicos porque set descarta duplicados
+
+                        ordem_dias = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+                        nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+                        map_dias   = dict(zip(ordem_dias, nomes_pt)) #apenas p abreviar dias de semana
+                        cnt=grp["dia_semana"].map(map_dias).value_counts().reindex(nomes_pt,fill_value=0) #quantas transacoes por dia de semana
+                        dia_semana_cnt=dia_semana_cnt.add(cnt,fill_value=0)
+                        for dia_sem, n in cnt.items():
+                            dia_semana_por_linha[linha][dia_sem] += n #adiciona transacoes por dia de semana em sua respectiva linha
+                if "sindicato" in dia.columns: #transacoes por sindicato
+                    cnt = dia["sindicato"].value_counts()
+                    sindicato_cnt = sindicato_cnt.add(cnt, fill_value=0)
+
+    valores = { #manter num dict p  ficar mais legivel
+    "operadora": operadora_cnt,
+    "linha": linha_cnt,
+    "sindicato": sindicato_cnt,
+    "subsidio": subsidio_operadora
+    }
+    for ax, (col, label, cor) in zip(axes, [
+        ("operadora", "Operadora", "steelblue"),
+        ("linha",     "Linha",     "mediumseagreen"),
+        ("sindicato", "Sindicato", "coral"),
+    ]):
+        top_bar(valores[col], f"Top 15 — {label} (nº transações)","Nº Transações", ax, color=cor)
+
+    plt.suptitle("Ranking por Entidade", fontweight="bold")
+    plt.tight_layout()
+    plt.savefig(out / "04_ranking_entidades.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+    # Subsídio total por operadora
+    sub_op = valores["subsidio"].nlargest(15)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    top_bar(sub_op, "Top 15 Operadoras — Subsídio Total (R$)", "R$", ax, color="darkorange")
+    plt.tight_layout()
+    plt.savefig(out / "04b_subsidio_por_operadora.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+    # Exportar tabela resumo por linha
+    linhas = transacoes.keys()
+
+    resumo_linha = pd.DataFrame({
+        "transacoes": [transacoes[l] for l in linhas],
+        "linha": list(linhas),
+        "cartoes_unicos": [len(cartoes_unicos[l]) for l in linhas],
+        "carros_unicos":[len(carros_unicos[l])for l in linhas],
+        "vl_linha_medio": [
+            vl_linha_sum[l] / vl_linha_count[l]
+            if vl_linha_count[l] else np.nan
+            for l in linhas
+        ],
+        "vl_trans_medio": [
+            vl_trans_sum[l] / vl_trans_count[l]
+            if vl_trans_count[l] else np.nan
+            for l in linhas
+        ],
+        "vl_subsidio_total": [
+            subsidio_total[l]
+            for l in linhas
+        ],
+        "pct_subsidio_medio": [
+            pct_sum[l] / pct_count[l]
+            if pct_count[l] else np.nan
+            for l in linhas
+        ]
+    })
+    for dia in ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]:
+        resumo_linha[dia] = [
+            dia_semana_por_linha[l].get(dia, 0)
+            for l in linhas
+        ] #atualiza transacoes por dia de semana para cada linha
+    resumo_linha = (resumo_linha.sort_values("transacoes", ascending=False).round(2))
+    print(resumo_linha.columns.tolist())     
+    resumo_linha.to_csv(out / "04c_resumo_por_linha.csv",index=False)
+    print(f"  Resumo por linha exportado ({len(resumo_linha)} linhas).")
+
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 6. ANÁLISE DE SENTIDO E INTEGRAÇÕES
+# ════════════════════════════════════════════════════════════════════════════
+
+def secao_sentido_integracoes(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
+    print("[5/7] Sentido e Integrações")
+
+    fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_WIDE)
+    cols_in_use=[
+        "sentido_label",
+        "qtde_integracoes",
+        "vl_subsidio",
+        "data_transacao"
+    ]
+    subsidio_sum = pd.Series(dtype=float)
+    subsidio_count = pd.Series(dtype=np.int64) #sum e count para inferir media
+    sentido_cnt=pd.Series(dtype=np.int64)
+    integracoes_cnt=pd.Series(dtype=np.int64)
+
+    with os.scandir(input) as files:
+        for file in files:
+            for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
+                dia=date_formatter(dia,TIPO)
+                dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela de 2026
+                if dia.empty:
+                    continue
+                if "sentido_label" in dia.columns:
+                    cnt = dia["sentido_label"].value_counts()
+                    sentido_cnt = sentido_cnt.add(cnt, fill_value=0)
+                if "qtde_integracoes" in dia.columns:
+                    cnt=dia["qtde_integracoes"].value_counts().sort_index()
+                    integracoes_cnt=integracoes_cnt.add(cnt, fill_value=0)
+                if "qtde_integracoes" in dia.columns and "vl_subsidio" in dia.columns: #so entra se dia tem todas essas colunas
+                    dia["tem_integracao"] = (dia["qtde_integracoes"] > 0).map({True:"Com integração", False:"Sem integração"})
+                    
+                    grp_sum = dia.groupby("tem_integracao")["vl_subsidio"].sum()
+                    grp_count = dia.groupby("tem_integracao")["vl_subsidio"].count()
+                    subsidio_sum = subsidio_sum.add(grp_sum, fill_value=0)
+                    subsidio_count = subsidio_count.add(grp_count, fill_value=0)
+
+    subsidio_medio = subsidio_sum / subsidio_count
+    print(sentido_cnt)
+    print(sentido_cnt.sum())
+    axes[0].pie(sentido_cnt.values, labels=sentido_cnt.index, autopct="%1.1f%%",
+                startangle=90, colors=sns.color_palette("pastel"))
+    axes[0].set_title("Distribuição por Sentido")
+
+    axes[1].bar(integracoes_cnt.index.astype(str), integracoes_cnt.values, color="mediumpurple", alpha=0.85)
+    axes[1].set_title("Quantidade de Integrações")
+    axes[1].set_xlabel("Nº de Integrações")
+    axes[1].set_ylabel("Frequência")
+
+    plt.tight_layout()
+    plt.savefig(out / "05_sentido_integracoes.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+    # Subsídio médio com e sem integração
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.bar(
+        subsidio_medio.index,
+        subsidio_medio.values
+    )
+    ax.set_title("Subsídio Médio — Com vs Sem Integração")
+    ax.set_xlabel("")
+    ax.set_ylabel("Subsídio Médio (R$)")
+    plt.tight_layout()
+    plt.savefig(out / "05b_subsidio_integracao.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+#Função que chama todas as funcionalidades
+
+def EDA_BU(input,output,sep,data_ini,data_fim):
+    start_time = time.perf_counter()
+    out=Path(output)
+    out.mkdir(parents=True, exist_ok=True)
+    input=Path(input)
+
+    secao_visao_geral(input, out,sep,data_ini,data_fim)
+    secao_valores(input,out,sep,data_ini,data_fim)
+    secao_temporal(input,out,sep,data_ini,data_fim)
+    secao_entidades(input,out,sep,data_ini,data_fim)
+    secao_sentido_integracoes(input,out,sep,data_ini,data_fim)
+
+    end_time = time.perf_counter()
+    execution_time = end_time - start_time
+    print(f"Execution time: {execution_time:.6f} seconds")
