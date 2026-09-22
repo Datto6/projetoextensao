@@ -15,7 +15,7 @@ def parse_brl(series: pd.Series) -> pd.Series:
     """Converte 'R$ 1.234,56' → 1234.56 (float)."""
     return (
         series.astype(str)
-        .str.replace(r"R\$\s*", "", regex=True)
+        .str.replace("R$", "", regex=False)
         .str.replace(".", "", regex=False)
         .str.replace(",", ".", regex=False)
         .str.strip()

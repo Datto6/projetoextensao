@@ -97,7 +97,7 @@ def date_formatter(df:pd.DataFrame,tipo:str):
 # 2. VISÃO GERAL
 # ════════════════════════════════════════════════════════════════════════════
 
-def secao_visao_geral(input:Path,out: Path):
+def secao_visao_geral(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
     print("\n[1/7] Visão Geral")
     #cast as double eh porque tudo foi lido como char, de resto eh contar distintos e autoexplicativo
     result = duckdb.sql(f"""
@@ -234,6 +234,8 @@ def secao_valores(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
 
     with os.scandir(input) as files:
         for file in files:
+            if not file.is_file(): #os.scandir retorna arquivos e diretorios, temos que checar
+                continue
             for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
                 dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela desejada
@@ -330,6 +332,8 @@ def secao_temporal(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
     ]#colunas p ler
     with os.scandir(input) as files:
         for file in files:
+            if not file.is_file(): #os.scandir retorna arquivos e diretorios, temos que checar
+                continue
             for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
                 dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela desejada
@@ -559,6 +563,8 @@ def secao_entidades(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
     carros_unicos=defaultdict(set) #atributos para fazer resumo por linha
     with os.scandir(input) as files:
         for file in files:
+            if not file.is_file(): #os.scandir retorna arquivos e diretorios, temos que checar
+                continue
             for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
                 dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela desejada

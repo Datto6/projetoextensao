@@ -43,7 +43,7 @@ def pegar_dados(PADRAO,DESTINO,TIPO):
 
 
     # Verificar espaço disponível
-    os.makedirs(DESTINO, exist_ok=True,parents=True)
+    os.makedirs(DESTINO, exist_ok=True)
 
     _, _, espaco_livre = shutil.disk_usage(DESTINO)
 

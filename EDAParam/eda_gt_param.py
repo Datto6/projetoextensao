@@ -155,6 +155,8 @@ def secao_temporal(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
     ]
     with os.scandir(input) as files:
         for file in files:
+            if not file.is_file(): #os.scandir retorna arquivos e diretorios, temos que checar
+                continue
             for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
                 dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela escolhida
@@ -354,6 +356,8 @@ def secao_entidades(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
 
     with os.scandir(input) as files:
         for file in files:
+            if not file.is_file(): #os.scandir retorna arquivos e diretorios, temos que checar
+                continue
             for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
                 dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra só na janela escolhida

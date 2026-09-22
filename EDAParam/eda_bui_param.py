@@ -164,7 +164,7 @@ def secao_visao_geral(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
                 print(f"{col:<30} {n}\n")
 
     #Fazer estatisticas descritivas, tal qual o describe de um df normal.
-    colunas=colunas.pop(-1)
+    colunas.pop(-1)
     query = f"""
         WITH dados AS (SELECT *FROM read_csv('{input}/*.csv',all_varchar=true,header=true))
 
@@ -222,6 +222,8 @@ def secao_valores(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
 
     with os.scandir(input) as files:
         for file in files:
+            if not file.is_file(): #os.scandir retorna arquivos e diretorios, temos que checar
+                continue
             for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
                 dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela de 2026
@@ -315,6 +317,8 @@ def secao_temporal(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
     ]#colunas p ler
     with os.scandir(input) as files:
         for file in files:
+            if not file.is_file(): #os.scandir retorna arquivos e diretorios, temos que checar
+                continue
             for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
                 dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela de 2026
@@ -546,6 +550,8 @@ def secao_entidades(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
     carros_unicos=defaultdict(set)
     with os.scandir(input) as files:
         for file in files:
+            if not file.is_file(): #os.scandir retorna arquivos e diretorios, temos que checar
+                continue
             for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
                 dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela de 2026
@@ -675,6 +681,8 @@ def secao_sentido_integracoes(input:Path,out: Path,sep:str,data_ini:str,data_fim
 
     with os.scandir(input) as files:
         for file in files:
+            if not file.is_file(): #os.scandir retorna arquivos e diretorios, temos que checar
+                continue
             for dia in load_data_spec(file.path,cols_in_use,TIPO,sep,chunksize=100_000):
                 dia=date_formatter(dia,TIPO)
                 dia=dia[dia["data_transacao"].between(data_ini,data_fim)] #filtra so na janela de 2026

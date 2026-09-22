@@ -4,6 +4,9 @@ from pathlib import Path
 import re
 from datetime import date,timedelta
 from merger import mergerMes
+from eda_be_param import EDA_BE
+from eda_bui_param import EDA_BU
+from eda_gt_param import EDA_GT
 def is_syntax_valid(filepath: str) -> bool:
     #Determina se sintasse de um filepath está correto
     try:
@@ -86,16 +89,24 @@ def main():
             current_date += delta
         downloaded.append(i) #adiciono esse tipo aos tipos que foram baixados
         organizado=Path()
-        mergerMes(path,args.output,args.tipo,args.sep)
+        tipo=i
+        if i=="GRATUIDADE":
+            tipo="GT"
+        mergerMes(path,args.output,tipo,args.sep)
     path_saida=Path(args.output)
 
     #chamadas de funcoes de gerar os graficos
+    data_ini=f"{ano_ini}-{mes_ini}-{dia_ini}"
+    data_fim=f"{ano_fim}-{mes_fim}-{dia_fim}"
     if "BE" in downloaded:
-        EDA_BE(path_input/"BE",path_saida/"BE","BE",",")
+        EDA_BE(input=path_input/"BE",output=path_saida/"BE",sep=",",data_ini=data_ini,data_fim=data_fim)
     if "BU" in downloaded:
-        EDA_BU(path_input/"BU",path_saida/"BU",",")
+        EDA_BU(input=path_input/"BU",output=path_saida/"BU",sep=",",data_ini=data_ini,data_fim=data_fim)
     if "GRATUIDADE" in downloaded:
-        EDA_GT(pathinput/"GT",path_saida/"GT",",")
+        EDA_GT(input=path_input/"GT",output=path_saida/"GT",sep=",",data_ini=data_ini,data_fim=data_fim)
     end_time = time.perf_counter()
     execution_time = end_time - start_time
     print(f"Execution time: {execution_time:.6f} seconds")
+
+if __name__=="__main__":
+    main()
