@@ -43,7 +43,7 @@ def load_data(path: str, cols_use:dict, tipo:str, sep: str = ";") -> pd.DataFram
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
         if "data_ordem" in df.columns:
-            df["data_ordem"]=pd.to_datetime(df[col], dayfirst=False, errors="coerce")
+            df["data_ordem"]=pd.to_datetime(df["data_ordem"], dayfirst=False, errors="coerce")
 
 
     # Monetários
@@ -94,12 +94,17 @@ def load_data_spec(path: str, cols_use:dict, tipo:str,sep: str=";"):
 def separar(input: Path, out: Path,tipo:str,sep:str):
     files_touched=[]
     empty_files=[]
+    DERIVED = ["hora", "dia_semana", "data_dia",
+               "pct_subsidio", "sentido_label", "tipo_aplicacao"]
+    # Pegar ordem de saida de colunas no csv output combinado
+    COLS_OUT = list(dict.fromkeys(list(pega_dict(tipo).values()) + DERIVED))
     with os.scandir(input) as files:
         for file in files:
             dia = load_data_spec(file.path,pega_dict(tipo),tipo, sep)
             if dia.empty:
                 empty_files.append(str(file.path))
                 continue #se o dia nao tiver nenhum valor, pulamos essa iteracao
+            dia = dia.reindex(columns=COLS_OUT)   # fixar ordem
             for month, group in dia.groupby(dia["data_transacao"].dt.month): #agrupa pela coluna de transacao
                 key = f"mes_{month}_{tipo}.csv"
                 arquivo=Path(out / key)

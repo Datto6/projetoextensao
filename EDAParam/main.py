@@ -51,7 +51,7 @@ def main():
         if not tratar(args,arg):
             print(f"Argumento {arg} em formato errado, rodar de novo")
             sys.exit()
-    tipos=["BE","BU","GRATUIDADE"]
+    tipos=["BE"] #,"BU","GRATUIDADE"]
     input=args.input
     ano_ini=int(args.data_inicio[:4])
     ano_fim=int(args.data_fim[:4])
@@ -99,11 +99,11 @@ def main():
     data_ini=f"{ano_ini}-{mes_ini}-{dia_ini}"
     data_fim=f"{ano_fim}-{mes_fim}-{dia_fim}"
     if "BE" in downloaded:
-        EDA_BE(input=path_input/"BE",output=path_saida/"BE",sep=",",data_ini=data_ini,data_fim=data_fim)
-    if "BU" in downloaded:
-        EDA_BU(input=path_input/"BU",output=path_saida/"BU",sep=",",data_ini=data_ini,data_fim=data_fim)
-    if "GRATUIDADE" in downloaded:
-        EDA_GT(input=path_input/"GT",output=path_saida/"GT",sep=",",data_ini=data_ini,data_fim=data_fim)
+        EDA_BE(input=path_saida/"BE",output=path_saida/"BE"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
+    # if "BU" in downloaded:
+    #     EDA_BU(input=path_saida/"BU",output=path_saida/"BU"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
+    # if "GRATUIDADE" in downloaded:
+    #     EDA_GT(input=path_saida/"GT",output=path_saida/"GT"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
     end_time = time.perf_counter()
     execution_time = end_time - start_time
     print(f"Execution time: {execution_time:.6f} seconds")

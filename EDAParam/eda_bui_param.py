@@ -247,6 +247,7 @@ def secao_valores(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
     for ax, (col, label) in zip(axes, cols_val):
         serie = valores[col].sort_index()
         max_val = serie.index.astype(float).max() #Pega máximo variável
+        max_val=min(max_val, 50) #a entrada tem alguns entradas
         bin_width = 0.5
 
         bins = np.arange(0, max_val + bin_width, bin_width)

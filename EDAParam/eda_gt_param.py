@@ -275,7 +275,7 @@ def secao_temporal(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
     plt.savefig(out / "03c_serie_diaria.png", dpi=150, bbox_inches="tight")
     plt.close()
     diario_dict = diario.set_index("data_dia")["transacoes"].to_dict() #cada dia vira um indexo, com seu valor associado
-    txt_faltantes(out=out,data_ini='2026-01-01', data_fim='2026-07-06',diario=diario_dict,minimo=MINIMO_ENTRADAS_GT) #cria arquivo txt com dias faltantes
+    txt_faltantes(out=out,data_ini=data_ini, data_fim=data_fim,diario=diario_dict,minimo=MINIMO_ENTRADAS_GT) #cria arquivo txt com dias faltantes
 
     #Latencia Media por Dia de Semana, separado por modal
     nomes_pt   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
