@@ -100,13 +100,13 @@ def main():
     data_fim=f"{ano_fim}-{mes_fim}-{dia_fim}"
     if "BE" in downloaded:
         EDA_BE(input=path_saida/"BE",output=path_saida/"BE"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
-    # if "BU" in downloaded:
-    #     EDA_BU(input=path_saida/"BU",output=path_saida/"BU"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
-    # if "GRATUIDADE" in downloaded:
-    #     EDA_GT(input=path_saida/"GT",output=path_saida/"GT"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
+    if "BU" in downloaded:
+        EDA_BU(input=path_saida/"BU",output=path_saida/"BU"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
+    if "GRATUIDADE" in downloaded:
+        EDA_GT(input=path_saida/"GT",output=path_saida/"GT"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
     end_time = time.perf_counter()
     execution_time = end_time - start_time
-    print(f"Execution time: {execution_time:.6f} seconds")
+    print(f"Execution time: {execution_time:.6f} seconds(total)")
 
 if __name__=="__main__":
     main()

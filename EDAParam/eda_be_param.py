@@ -687,4 +687,4 @@ def EDA_BE(input,output,sep,data_ini,data_fim):
     secao_entidades(input,out,sep,data_ini,data_fim)
     end_time = time.perf_counter()
     execution_time = end_time - start_time
-    print(f"Execution time: {execution_time:.6f} seconds")
+    print(f"Execution time: {execution_time:.6f} seconds(EDA de BE)")
