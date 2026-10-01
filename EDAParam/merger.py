@@ -123,9 +123,9 @@ def mergerMes(input,output,tipo,sep):
     out.mkdir(parents=True, exist_ok=True)
     separar(input,out,tipo,sep)
     print(f"\n{'═'*60}")
-    print(f"  EDA concluída. Outputs salvos em: {out.resolve()}")
+    print(f"  Junção concluida, salvo em: {out.resolve()}")
     print(f"{'═'*60}\n")
 
     end_time = time.perf_counter()
     execution_time = end_time - start_time
-    print(f"Execution time: {execution_time:.6f} seconds")
+    print(f"Tempo de pré processamento de {tipo}: {execution_time:.6f} seconds")

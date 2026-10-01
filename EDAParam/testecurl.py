@@ -3,6 +3,10 @@ import re
 import zipfile
 import requests
 import shutil
+class SemRecursos(Exception):
+    pass
+class SemEspaco(Exception):
+    pass
 
 def pegar_dados(PADRAO,DESTINO,TIPO):
     # Get package information
@@ -28,7 +32,10 @@ def pegar_dados(PADRAO,DESTINO,TIPO):
 
         if re.search(PADRAO, nome):
             recursos.append((nome, download_url))
-
+        
+    if len(recursos)==0: #Checa se achei algum arquivo
+        raise SemRecursos("Não foi achado nenhum arquivo")
+    
     # Calcular o tamanho total
     tamanho_total = 0
 
@@ -51,12 +58,11 @@ def pegar_dados(PADRAO,DESTINO,TIPO):
     print(f"Espaço livre:  {espaco_livre / (1024**3):.2f} GB")
 
     if tamanho_total > espaco_livre:
-        print("ERRO: não há espaço suficiente para baixar os arquivos.")
-        return
+        raise SemEspaco("ERRO: não há espaço suficiente para baixar os arquivos.")
 
     print(f"Espaço suficiente. Iniciando download dos arquivos de {TIPO}...\n")
-
     # Download matching resources
+
     for nome,download_url in recursos:
     #nome= nome de um recurso individual dentro dos recursos achados no request
     #download_url=URL de um recurso individual
@@ -72,7 +78,6 @@ def pegar_dados(PADRAO,DESTINO,TIPO):
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
-
     # Calcular tamanho descompactado de todos os ZIPs
     tamanho_extraido = 0
 
@@ -93,8 +98,7 @@ def pegar_dados(PADRAO,DESTINO,TIPO):
     print(f"Espaço livre: "f"{espaco_livre / (1024**3):.2f} GB")
 
     if tamanho_extraido > espaco_livre:
-        print("ERRO: não há espaço suficiente para extrair os arquivos.")
-        return
+        raise SemEspaco("ERRO: não há espaço suficiente para baixar os arquivos.")
     
     # Extract ZIPs and remove them
     for filename in os.listdir(DESTINO):

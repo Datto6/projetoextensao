@@ -1,58 +1,20 @@
 import os,sys,argparse,time,shutil
-from testecurl import pegar_dados
+from testecurl import pegar_dados,SemEspaco,SemRecursos
 from pathlib import Path
-import re
 from datetime import date,timedelta
 from merger import mergerMes
 from eda_be_param import EDA_BE
 from eda_bui_param import EDA_BU
 from eda_gt_param import EDA_GT
-def is_syntax_valid(filepath: str) -> bool:
-    #Determina se sintasse de um filepath está correto
-    try:
-        # resolve() will trigger an OSError if the path syntax contains illegal characters
-        Path(filepath).resolve(strict=False)
-        return True
-    except (OSError, ValueError):
-        return False
+from interface_grafica import get_arguments
 
-def tratar(argumentos, arg_esp):
-    #Retorna True se argumento específico está de acordo com os padrões aceitos pelo programa
-    valor_considerado=getattr(argumentos,arg_esp)
-    mapa_correto={
-        "data_inicio":"\\d{4}/\\d{2}/\\d{2}",  #formato yyyy/mm/dd
-        "data_fim":"\\d{4}/\\d{2}/\\d{2}",
-        "sep":";|,", #ou , ou ;
-    }
-    for key, value in mapa_correto.items():
-        if key==arg_esp:
-            if re.fullmatch(value,valor_considerado): #Checa se tá no formato certinho,com regex
-                return True
-            return False
-    #Se chegou aqui, o atributo considerado é um path
-    #Vamos apenas testar o sintasse, o acesso  e outras coisas vai ser visto depois
-    return is_syntax_valid(valor_considerado)
 
 def main():
     start_time=time.perf_counter()
-    #Definição de argumentos de entrada
-    parser = argparse.ArgumentParser(
-        description="Entrada para EDA sobre dados"
-    )
-    parser.add_argument("--data_inicio",  required=True, help="Data de início(ambas as datas em formato yyyy/mm/dd)")
-    parser.add_argument("--data_fim", required=True, help="Data de fim do período considerado")
-    parser.add_argument("--sep",    required=True,   help="Delimitador (padrão: ';')")
-    parser.add_argument("--output", required=True, help="Pasta de saída do EDA")
-    parser.add_argument("--input", required=True, help="Pasta de entrada de dados a serem analisados")
-    args = parser.parse_args()
-    #Rotina de tratamento de input básico
-    nomes_args=["data_inicio","data_fim","sep","output","input"]
-    for arg in nomes_args:
-        if not tratar(args,arg):
-            print(f"Argumento {arg} em formato errado, rodar de novo")
-            sys.exit()
-    tipos=["BE"] #,"BU","GRATUIDADE"]
+    args = get_arguments()
+    tipos=["BE","BU","GRATUIDADE"]
     input=args.input
+    #assume yyyy/mm/dd para as datas
     ano_ini=int(args.data_inicio[:4])
     ano_fim=int(args.data_fim[:4])
 
@@ -70,29 +32,44 @@ def main():
     delta = timedelta(days=1)
     path_input=Path(input)
     downloaded=[]
-
+    hoje=date.today()
     #Rotina de download de arquivos
     for i in tipos:
+        comeco_download=time.perf_counter()
         path=path_input/i #input/tipo
         current_date = start_date
-        while current_date <= end_date:
+        fez_download=False
+        while current_date <= end_date and current_date <=hoje:
             ano=current_date.year
             mes=current_date.month
             dia=current_date.day
             padrao=f"TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}" #padrao pra pegar os dados
             try:
                 pegar_dados(padrao,path,i)
-            except:
+                fez_download=True
+            except SemRecursos:
+                fez_download=False
+                break
+            except SemEspaco:
+                shutil.rmtree(path) #Sem espaço, apagar arquivos do tipo
+                print(f"Sem espaço a partir do dia TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}, apagando diretorio desse tipo ")
+                fez_download=False
+                break
+            except Exception:
                 shutil.rmtree(path) #caso de erro, apagar arquivos do tipo
                 print(f"Erro de leitura no dia TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}, apagando diretorio desse tipo ")
+                fez_download=False
                 break
             current_date += delta
-        downloaded.append(i) #adiciono esse tipo aos tipos que foram baixados
-        organizado=Path()
-        tipo=i
-        if i=="GRATUIDADE":
-            tipo="GT"
-        mergerMes(path,args.output,tipo,args.sep)
+        if fez_download:
+            downloaded.append(i) #adiciono esse tipo aos tipos que foram baixados
+            fim_download=time.perf_counter()
+            download_time = fim_download - comeco_download
+            print(f"Tempo de download de {i}: {download_time:.6f} seconds")
+            tipo=i
+            if i=="GRATUIDADE":
+                tipo="GT"
+            mergerMes(path,args.output,tipo,args.sep)
     path_saida=Path(args.output)
 
     #chamadas de funcoes de gerar os graficos
@@ -106,7 +83,7 @@ def main():
         EDA_GT(input=path_saida/"GT",output=path_saida/"GT"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
     end_time = time.perf_counter()
     execution_time = end_time - start_time
-    print(f"Execution time: {execution_time:.6f} seconds(total)")
+    print(f"Execution time: {execution_time:.6f} seconds(total do script todo)")
 
 if __name__=="__main__":
     main()
