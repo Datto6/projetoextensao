@@ -7,8 +7,7 @@ from eda_be_param import EDA_BE
 from eda_bui_param import EDA_BU
 from eda_gt_param import EDA_GT
 from interface_grafica import get_arguments
-
-
+import pandas as pd
 def main():
     start_time=time.perf_counter()
     args = get_arguments()
@@ -75,6 +74,8 @@ def main():
     #chamadas de funcoes de gerar os graficos
     data_ini=f"{ano_ini}-{mes_ini}-{dia_ini}"
     data_fim=f"{ano_fim}-{mes_fim}-{dia_fim}"
+    data_ini = pd.Timestamp(data_ini)
+    data_fim = pd.Timestamp(data_fim) + pd.Timedelta(days=1)
     if "BE" in downloaded:
         EDA_BE(input=path_saida/"BE",output=path_saida/"BE"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
     if "BU" in downloaded:
