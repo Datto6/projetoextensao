@@ -1,0 +1,8 @@
+RESUMO EXECUTIVO
+==================================================
+
+Total de transações                 1090899
+Hashes únicos                       316953
+Linhas únicas                       820
+Operadoras únicas                   532
+Sindicatos únicos                   11

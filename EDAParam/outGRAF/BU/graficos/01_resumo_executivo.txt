@@ -1,0 +1,15 @@
+RESUMO EXECUTIVO
+==================================================
+
+Total de transações                 3638908
+Hashes únicos                       608340
+Linhas únicas                       1512
+Operadoras únicas                   499
+Sindicatos únicos                   9
+Total Vl Linha (R$)                 34,256,879.10
+Total Vl Trans (R$)                 18,928,784.15
+Total Vl Subsídio (R$)              15,314,509.95
+Média % Subsídio                    40.9%
+Com integrações (>0)                1314557
+
+── Campos com valores ausentes ──
