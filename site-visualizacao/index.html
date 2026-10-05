@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transporte Inteligente - Dashboard</title>
+
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚌</text></svg>">
+
+    <script async src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+    <main>
+        <header>
+            <h1>Resultados da análise de dados <br> do período selecionado</h1>
+        </header>
+
+        <section>
+            <h1>Periodo selecionado</h1>
+            <p>
+                A seguir estarão as análises dos dados encontrados entre <span class="destaque">67/67/1967</span> e <span class="destaque">67/67/6767</span>.
+            </p>
+        </section>
+
+        <section>
+            <h1>Bilhete Unico (BU)</h1>
+
+            <h2>Valores de Subsídio e arrecadação</h2>
+            <img src="imagens/BU/02_distribuicao_valores.png">
+            <img src="imagens/BU/02c_pct_subsidio.png">
+
+            <hr>
+            <h2>Transações por hora e dias da semana</h2>
+            <img src="imagens/BU/03_analise_temporal_hora.png">
+            <img src="imagens/BU/03b_transacoes_dia_semana.png">
+            <img src="imagens/BU/03c_serie_diaria.png">
+            <img src="imagens/BU/03d_latencia_processamento.png">
+            <img src="imagens/BU/03f_latencia_media_semana_modal.png">
+            <img src="imagens/BU/03g_latencia_media_semana_modal.png">
+
+            <hr>
+            <h2>Operadoras</h2>
+            <img src="imagens/BU/04_ranking_entidades.png">
+            <img src="imagens/BU/04b_subsidio_por_operadora.png">
+
+            <hr>
+            <h2>Integrações</h2>
+            <img src="imagens/BU/05_sentido_integracoes.png">
+            <img src="imagens/BU/05b_subsidio_integracao.png">
+        </section>
+
+        <section>
+            <h1>Bilhetagem Eletrônica (BE)</h1>
+
+            <h2>Valores de Subsídio e arrecadação</h2>
+            <img src="imagens/BE/02_distribuicao_valores.png">
+            <img src="imagens/BE/02c_pct_subsidio.png">
+
+            <hr>
+            <h2>Transações por hora e dias da semana</h2>
+            <img src="imagens/BE/03_analise_temporal_hora.png">
+            <img src="imagens/BE/03b_transacoes_dia_semana.png">
+            <img src="imagens/BE/03c_serie_diaria.png">
+            <img src="imagens/BE/03d_latencia_processamento.png">
+            <img src="imagens/BE/03f_latencia_media_semana_modal.png">
+            <img src="imagens/BE/03g_latencia_media_semana_modal.png">
+
+            <hr>
+            <h2>Operadoras</h2>
+            <img src="imagens/BE/04_ranking_entidades.png">
+            <img src="imagens/BE/04b_subsidio_por_operadora.png">
+        </section>
+
+        <section>
+            <h1>Gratuidade (GT)</h1>
+
+            <hr>
+            <h2>Transações por hora e dias da semana</h2>
+            <img src="imagens/GT/03a_transacoes_hora_semana.png">
+            <img src="imagens/GT/03b_transacoes_dia_semana.png">
+            <img src="imagens/GT/03c_serie_diaria.png">
+            <img src="imagens/GT/03d_latencia_processamento.png">
+            <img src="imagens/GT/03f_latencia_media_semana_modal.png">
+            <img src="imagens/GT/03g_latencia_media_semana_modal.png">
+
+            <hr>
+            <h2>Operadoras</h2>
+            <img src="imagens/GT/04_ranking_entidades.png">
+            <img src="imagens/GT/04b_transacoes_por_aplicacao.png">
+            <img src="imagens/GT/04d_pie_aplicacao.png">
+        </section>
+    </main>
+
+    <footer>
+        <p>Site desenvolvido por Nilo Zeribinate e Rafael Osborne</p>
+    </footer>
+
+    <script src="script.js"></script>
+    <script src="script_imagens.js"></script>
+</body>
+</html>

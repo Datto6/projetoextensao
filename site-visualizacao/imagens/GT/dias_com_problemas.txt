@@ -1,0 +1,8 @@
+=== Dias sem registros (não encontrados) ===
+28/03/2026
+
+=== Dias com 0 transações ===
+Nenhum
+
+=== Dias com menos de 5000 transações ===
+Nenhum
