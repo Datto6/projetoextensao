@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Processamento de Imagens</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+
+        /* Estilo do CSS para a "coisinha rodando" */
+        #loading {
+            display: none; /* Escondido por padrão */
+            margin-top: 20px;
+            font-size: 18px;
+            color: #333;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 10px;
+        }
+        @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
+
+        /* Esconde a página de resultados por padrão */
+        #resultado-container {
+            display: none; 
+        }
+
+        .imagem-gerada {
+            max-width: 100%;
+            border: 1px solid #ccc;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .btn {
+            padding: 10px 15px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover { background-color: #218838; }
+        .btn-nova-consulta { background-color: #007bff; }
+        .btn-nova-consulta:hover { background-color: #0069d9; }
+
+
+
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename= 'styles/style.css') }}">
+
+</head>
+<body>
+
+    <!-- BLOCO 1: O FORMULÁRIO -->
+    <div id="form-container">
+        <h1>Configuração do Processamento</h1>
+        <form id="meuForm">
+            <p>
+                <label>Data Inicial:</label><br>
+                <input type="date" id="data_inicial" required>
+            </p>
+            <p>
+                <label>Data Final:</label><br>
+                <input type="date" id="data_final" required>
+            </p>
+            <p>
+                <label>Local dos Arquivos de Entrada:</label><br>
+                <input type="text" id="local_entrada" placeholder="/caminho/para/dados" required style="width: 300px;">
+            </p>
+            <button type="submit" class="btn">Iniciar Processamento</button>
+        </form>
+    </div>
+
+    <!-- BLOCO 2: TELA DE CARREGAMENTO -->
+    <div id="loading">
+        <div class="spinner"></div> Processando... Por favor, aguarde. Isso pode levar cerca de 15 minutos.
+    </div>
+
+    <!-- BLOCO 3: SEU HTML PRONTO PARA RESULTADOS -->
+    <div id="resultado-container">
+        <section>
+            <button onclick="novaConsulta()" class="btn btn-nova-consulta">Fazer Nova Consulta</button>
+        </section>
+
+        <section>
+            <h1>Periodo selecionado</h1>
+            <p>
+                A seguir estarão as análises dos dados encontrados entre <span class="destaque" id="span_data_inicial">24/03/2026</span> e <span class="destaque" id="span_data_final">27/03/2026</span>.
+            </p>
+        </section>
+
+        <section>
+            <h1>Bilhete Unico (BU)</h1>
+
+            <h2>Valores de Subsídio e arrecadação</h2>
+            <img src="imagens/BU/02_distribuicao_valores.png">
+            <img src="imagens/BU/02c_pct_subsidio.png">
+
+            <hr>
+            <h2>Transações por hora e dias da semana</h2>
+            <img src="imagens/BU/03_analise_temporal_hora.png">
+            <img src="imagens/BU/03b_transacoes_dia_semana.png">
+            <img src="imagens/BU/03c_serie_diaria.png">
+            <img src="imagens/BU/03d_latencia_processamento.png">
+            <img src="imagens/BU/03f_latencia_media_semana_modal.png">
+            <img src="imagens/BU/03g_latencia_media_semana_modal.png">
+
+            <hr>
+            <h2>Operadoras</h2>
+            <img src="imagens/BU/04_ranking_entidades.png">
+            <img src="imagens/BU/04b_subsidio_por_operadora.png">
+
+            <hr>
+            <h2>Integrações</h2>
+            <img src="imagens/BU/05_sentido_integracoes.png">
+            <img src="imagens/BU/05b_subsidio_integracao.png">
+        </section>
+
+        <section>
+            <h1>Bilhetagem Eletrônica (BE)</h1>
+
+            <h2>Valores de Subsídio e arrecadação</h2>
+            <img src="imagens/BE/02_distribuicao_valores.png">
+            <img src="imagens/BE/02c_pct_subsidio.png">
+
+            <hr>
+            <h2>Transações por hora e dias da semana</h2>
+            <img src="imagens/BE/03_analise_temporal_hora.png">
+            <img src="imagens/BE/03b_transacoes_dia_semana.png">
+            <img src="imagens/BE/03c_serie_diaria.png">
+            <img src="imagens/BE/03d_latencia_processamento.png">
+            <img src="imagens/BE/03f_latencia_media_semana_modal.png">
+            <img src="imagens/BE/03g_latencia_media_semana_modal.png">
+
+            <hr>
+            <h2>Operadoras</h2>
+            <img src="imagens/BE/04_ranking_entidades.png">
+            <img src="imagens/BE/04b_subsidio_por_operadora.png">
+        </section>
+
+        <section>
+            <h1>Gratuidade (GT)</h1>
+
+            <hr>
+            <h2>Transações por hora e dias da semana</h2>
+            <img src="imagens/GT/03a_transacoes_hora_semana.png">
+            <img src="imagens/GT/03b_transacoes_dia_semana.png">
+            <img src="imagens/GT/03c_serie_diaria.png">
+            <img src="imagens/GT/03d_latencia_processamento.png">
+            <img src="imagens/GT/03f_latencia_media_semana_modal.png">
+            <img src="imagens/GT/03g_latencia_media_semana_modal.png">
+
+            <hr>
+            <h2>Operadoras</h2>
+            <img src="imagens/GT/04_ranking_entidades.png">
+            <img src="imagens/GT/04b_transacoes_por_aplicacao.png">
+            <img src="imagens/GT/04d_pie_aplicacao.png">
+        </section>
+    </div>
+
+    <footer>
+        <p>Site desenvolvido por Nilo Zeribinate e Rafael Osborne</p>
+    </footer>
+
+    <!-- SCRIPT DE CONTROLE DA PÁGINA -->
+    <script>
+    document.getElementById('meuForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        // Esconde o form e mostra o spinner de loading
+        document.getElementById('form-container').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+
+        const dadosEnvio = {
+            data_inicial: document.getElementById('data_inicial').value,
+            data_final: document.getElementById('data_final').value,
+            local_entrada: document.getElementById('local_entrada').value
+        };
+
+        // PASSO 1: Manda a requisição inicial para enfileirar a tarefa
+        fetch('/processar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dadosEnvio)
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Recebemos o "ticket". Vamos começar a checar se já está pronto.
+            checarStatus(data.task_id, data.exec_id);
+        })
+        .catch(error => alert("Erro ao iniciar o processamento."));
+    });
+
+    // Cria uma função rápida para converter "YYYY-MM-DD" em "DD/MM/YYYY"
+    function formatarDataParaBR(dataISO) {
+        if (!dataISO) return ""; // Prevenção de erro caso esteja vazio
+        const partes = dataISO.split('-'); // Corta a string nos traços
+        return `${partes[2]}/${partes[1]}/${partes[0]}`; // Remonta como DD/MM/YYYY
+    }
+
+    // PASSO 2: Função que fica perguntando o status a cada 5 segundos
+    function checarStatus(taskId, execId) {
+        fetch(`/status/${taskId}/${execId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.state === 'SUCCESS') {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('resultado-container').style.display = 'block';
+
+                // Pega os valores originais que foram digitados no formulário
+                const valorDataIni = document.getElementById('data_inicial').value;
+                const valorDataFim = document.getElementById('data_final').value;
+
+                // Insere as datas formatadas dentro dos spans
+                document.getElementById('span_data_inicial').textContent = formatarDataParaBR(valorDataIni);
+                document.getElementById('span_data_final').textContent = formatarDataParaBR(valorDataFim);
+
+                pastaGerada = data.caminho
+
+                const imagens = document.querySelectorAll('#resultado-container img');
+
+                imagens.forEach(img => {
+                    let srcAtual = img.getAttribute('src'); 
+                    let nomeDoArquivo = srcAtual.split('/').slice(-2).join("/");
+                    
+                    img.src = `${pastaGerada}/${nomeDoArquivo}`;
+                });
+
+                // Cria as tags <img> dinamicamente com base nas imagens retornadas pelo Flask
+                const img = document.createElement('img');
+                img.src = `${data.caminho}/a.png`;
+                img.className = 'imagem-gerada';
+                galeria.appendChild(img);
+            } 
+            else if (data.state === 'FAILURE') {
+                alert("Ocorreu um erro no servidor durante o processamento.");
+                novaConsulta(); // Volta pro início
+            } 
+            else {
+                // Ainda está processando. Espera 5 segundos e chama ela mesma de novo.
+                setTimeout(() => {
+                    checarStatus(taskId, execId);
+                }, 5000); 
+            }
+        });
+    }
+
+    function novaConsulta() {
+        document.getElementById('resultado-container').style.display = 'none';
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('form-container').style.display = 'block';
+        document.getElementById('meuForm').reset();
+    }
+</script>
+</body>
+</html>
