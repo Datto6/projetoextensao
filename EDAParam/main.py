@@ -1,7 +1,8 @@
 from flask import Flask, jsonify, render_template, request, url_for
 from celery import Celery
 import time
-import os,datetime
+import os
+from datetime import datetime
 import uuid
 from processamento import processar as executar_processamento
 
@@ -12,7 +13,7 @@ app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
 app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
 
 # Inicializando o Celery atrelado ao Flask
-celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
+celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'], backend=app.confi['CELERY_RESULT_BACKEND'])
 celery.conf.update(app.config)
 
 # A anotação @celery.task avisa que ela vai rodar em segundo plano
@@ -23,12 +24,9 @@ def processamento_externo(self, data_inicial, data_final, local_entrada, pasta_s
     # só chamar a função de processamento aqui dentro
     data_inicial = datetime.strptime(data_inicial, "%Y-%m-%d").strftime("%Y/%m/%d")
 
-    data_final = datetime.strptime(
-        data_final, "%Y-%m-%d"
-    ).strftime("%Y/%m/%d")
+    data_final = datetime.strptime(data_final, "%Y-%m-%d").strftime("%Y/%m/%d")
 
-    executar_processamento(data_inicial,data_final,local_entrada,pasta_saida
-)
+    executar_processamento(data_inicial,data_final,local_entrada,pasta_saida)
     
     return {'status': 'Concluído'}
 
