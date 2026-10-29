@@ -110,7 +110,7 @@ def secao_visao_geral(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
         all_varchar=true,
         header=true
     )
-    """).fetchone()
+    """).fetchall()[0]
 
     resumo = {
         "Total de transações": result[0],

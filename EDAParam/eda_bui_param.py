@@ -114,7 +114,7 @@ def secao_visao_geral(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
         all_varchar=true,
         header=true
     )
-    """).fetchone()
+    """).fetchall()[0]
     #fetchone pega a unica row de saida do query
     resumo = {
         "Total de transações": result[0],
@@ -141,7 +141,7 @@ def secao_visao_geral(input:Path,out: Path,sep:str,data_ini:str,data_fim:str):
             all_varchar=true,
             header=true
         )
-    """).fetchone()
+    """).fetchall()[0]
 
     colunas = [
         "vl_linha",
