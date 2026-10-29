@@ -1,90 +1,86 @@
-import os,sys,argparse,time,shutil
-from testecurl import pegar_dados,SemEspaco,SemRecursos
-from pathlib import Path
-from datetime import date,timedelta
-from merger import mergerMes
-from eda_be_param import EDA_BE
-from eda_bui_param import EDA_BU
-from eda_gt_param import EDA_GT
-from interface_grafica import get_arguments
-import pandas as pd
-def main():
-    start_time=time.perf_counter()
-    args = get_arguments()
-    tipos=["BE","BU","GRATUIDADE"]
-    input=args.input
-    #assume yyyy/mm/dd para as datas
-    ano_ini=int(args.data_inicio[:4])
-    ano_fim=int(args.data_fim[:4])
+from flask import Flask, jsonify, render_template, request, url_for
+from celery import Celery
+import time
+import os,datetime
+import uuid
+from processamento import processar as executar_processamento
 
-    mes_ini=int(args.data_inicio[5:7])
-    mes_fim=int(args.data_fim[5:7])
+app = Flask(__name__)
 
-    dia_ini=int(args.data_inicio[8:])
-    dia_fim=int(args.data_fim[8:])
-    try:
-        start_date = date(ano_ini, mes_ini, dia_ini)
-        end_date = date(ano_fim, mes_fim, dia_fim)
-    except ValueError:
-        print("Data inválida. Checar meses, anos ou dias invalidos, e rodar de novo. ")
-        sys.exit()
-    delta = timedelta(days=1)
-    path_input=Path(input)
-    downloaded=[]
-    hoje=date.today()
-    #Rotina de download de arquivos
-    for i in tipos:
-        comeco_download=time.perf_counter()
-        path=path_input/i #input/tipo
-        current_date = start_date
-        fez_download=False
-        while current_date <= end_date and current_date <=hoje:
-            ano=current_date.year
-            mes=current_date.month
-            dia=current_date.day
-            padrao=f"TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}" #padrao pra pegar os dados
-            try:
-                pegar_dados(padrao,path,i)
-                fez_download=True
-            except SemRecursos:
-                fez_download=False
-                break
-            except SemEspaco:
-                shutil.rmtree(path) #Sem espaço, apagar arquivos do tipo
-                print(f"Sem espaço a partir do dia TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}, apagando diretorio desse tipo ")
-                fez_download=False
-                break
-            except Exception:
-                shutil.rmtree(path) #caso de erro, apagar arquivos do tipo
-                print(f"Erro de leitura no dia TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}, apagando diretorio desse tipo ")
-                fez_download=False
-                break
-            current_date += delta
-        if fez_download:
-            downloaded.append(i) #adiciono esse tipo aos tipos que foram baixados
-            fim_download=time.perf_counter()
-            download_time = fim_download - comeco_download
-            print(f"Tempo de download de {i}: {download_time:.6f} seconds")
-            tipo=i
-            if i=="GRATUIDADE":
-                tipo="GT"
-            mergerMes(path,args.output,tipo,args.sep)
-    path_saida=Path(args.output)
+# Configuração de conexão com o Redis
+app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
+app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
 
-    #chamadas de funcoes de gerar os graficos
-    data_ini=f"{ano_ini}-{mes_ini}-{dia_ini}"
-    data_fim=f"{ano_fim}-{mes_fim}-{dia_fim}"
-    data_ini = pd.Timestamp(data_ini)
-    data_fim = pd.Timestamp(data_fim) + pd.Timedelta(days=1)
-    if "BE" in downloaded:
-        EDA_BE(input=path_saida/"BE",output=path_saida/"BE"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
-    if "BU" in downloaded:
-        EDA_BU(input=path_saida/"BU",output=path_saida/"BU"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
-    if "GRATUIDADE" in downloaded:
-        EDA_GT(input=path_saida/"GT",output=path_saida/"GT"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
-    end_time = time.perf_counter()
-    execution_time = end_time - start_time
-    print(f"Execution time: {execution_time:.6f} seconds(total do script todo)")
+# Inicializando o Celery atrelado ao Flask
+celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
+celery.conf.update(app.config)
 
-if __name__=="__main__":
-    main()
+# A anotação @celery.task avisa que ela vai rodar em segundo plano
+@celery.task(bind=True)
+def processamento_externo(self, data_inicial, data_final, local_entrada, pasta_saida):
+    print(f"Iniciando processamento em background... (Destino: {pasta_saida})")
+
+    # só chamar a função de processamento aqui dentro
+    data_inicial = datetime.strptime(data_inicial, "%Y-%m-%d").strftime("%Y/%m/%d")
+
+    data_final = datetime.strptime(
+        data_final, "%Y-%m-%d"
+    ).strftime("%Y/%m/%d")
+
+    executar_processamento(data_inicial,data_final,local_entrada,pasta_saida
+)
+    
+    return {'status': 'Concluído'}
+
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+
+@app.route('/processar', methods=['POST'])
+def processar():
+    dados = request.get_json()
+    
+    # Gera ID e cria pasta
+    exec_id = str(uuid.uuid4())
+    pasta_saida = os.path.join(app.static_folder, 'exports', exec_id)
+    os.makedirs(pasta_saida, exist_ok=True)
+
+    # ENVIA PARA O CELERY USANDO .delay()
+    # Isso NÃO trava o código. Ele despacha e passa para a linha de baixo imediatamente.
+    task = processamento_externo.delay(
+        dados.get('data_inicial'),
+        dados.get('data_final'),
+        dados.get('local_entrada'),
+        pasta_saida
+    )
+
+    # Retorna o ID da tarefa (o "ticket") para o JavaScript
+    return jsonify({
+        'task_id': task.id, 
+        'exec_id': exec_id
+    }), 202
+
+
+@app.route('/status/<task_id>/<exec_id>')
+def task_status(task_id, exec_id):
+    # Consulta o status da tarefa no Redis
+    task = processamento_externo.AsyncResult(task_id)
+    
+    if task.state == 'PENDING' or task.state == 'PROGRESS':
+        return jsonify({'state': task.state})
+        
+    elif task.state == 'SUCCESS':
+        caminho = url_for('static', filename=f'exports/{exec_id}/')
+        return jsonify({
+            'state': task.state,
+            'caminho': caminho # Altere aqui para "static/teste" para teste
+        })
+        
+    else:
+        return jsonify({'state': 'FAILURE', 'erro': str(task.info)})
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
