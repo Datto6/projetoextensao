@@ -13,7 +13,7 @@ app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
 app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
 
 # Inicializando o Celery atrelado ao Flask
-celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'], backend=app.confi['CELERY_RESULT_BACKEND'])
+celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'], backend=app.config['CELERY_RESULT_BACKEND'])
 celery.conf.update(app.config)
 
 # A anotação @celery.task avisa que ela vai rodar em segundo plano
@@ -26,7 +26,7 @@ def processamento_externo(self, data_inicial, data_final, local_entrada, pasta_s
 
     data_final = datetime.strptime(data_final, "%Y-%m-%d").strftime("%Y/%m/%d")
 
-    executar_processamento(data_inicial,data_final,local_entrada,pasta_saida)
+    executar_processamento(data_inicial,data_final,local_entrada,pasta_saida,";")
     
     return {'status': 'Concluído'}
 

@@ -6,22 +6,19 @@ from merger import mergerMes
 from eda_be_param import EDA_BE
 from eda_bui_param import EDA_BU
 from eda_gt_param import EDA_GT
-from interface_grafica import get_arguments
 import pandas as pd
-def processar(data_ini:str, data_fim:str, input:str, output:str):
+def processar(data_inicio:str, data_fim:str, input:str, output:str,sep:str):
     start_time=time.perf_counter()
-    args = get_arguments()
     tipos=["BE","BU","GRATUIDADE"]
-    input=args.input
     #assume yyyy/mm/dd para as datas
-    ano_ini=int(args.data_inicio[:4])
-    ano_fim=int(args.data_fim[:4])
+    ano_ini=int(data_inicio[:4])
+    ano_fim=int(data_fim[:4])
 
-    mes_ini=int(args.data_inicio[5:7])
-    mes_fim=int(args.data_fim[5:7])
+    mes_ini=int(data_inicio[5:7])
+    mes_fim=int(data_fim[5:7])
 
-    dia_ini=int(args.data_inicio[8:])
-    dia_fim=int(args.data_fim[8:])
+    dia_ini=int(data_inicio[8:])
+    dia_fim=int(data_fim[8:])
     try:
         start_date = date(ano_ini, mes_ini, dia_ini)
         end_date = date(ano_fim, mes_fim, dia_fim)
@@ -68,8 +65,8 @@ def processar(data_ini:str, data_fim:str, input:str, output:str):
             tipo=i
             if i=="GRATUIDADE":
                 tipo="GT"
-            mergerMes(path,args.output,tipo,args.sep)
-    path_saida=Path(args.output)
+            mergerMes(path,output,tipo,sep)
+    path_saida=Path(output)
 
     #chamadas de funcoes de gerar os graficos
     data_ini=f"{ano_ini}-{mes_ini}-{dia_ini}"

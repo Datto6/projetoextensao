@@ -226,8 +226,11 @@
                     formatarDataParaBR(document.getElementById('data_final').value);
 
                 document.querySelectorAll('#resultado-container img').forEach(img => {
-                    const nomeDoArquivo = img.getAttribute('src').split('/').slice(-2).join('/');
-                    img.src = `${data.caminho}${nomeDoArquivo}`;   // caminho já termina com "/"
+                    const original = img.dataset.src;              // lê o data-src
+                    if (!original) return;
+                    const nomeDoArquivo = original.split('/').slice(-2).join('/');   // ex: "BU/02_distribuicao_valores.png"
+                    img.onerror = () => { img.style.display = 'none'; };            // esconde imagem que não existir
+                    img.src = `${data.caminho}${nomeDoArquivo}`;
                 });
             }
             else if (data.state === 'FAILURE') {
