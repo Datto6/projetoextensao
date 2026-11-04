@@ -38,8 +38,6 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import LabelEncoder
 from constants import * 
 from utility import txt_faltantes
 import duckdb
