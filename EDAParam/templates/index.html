@@ -106,49 +106,49 @@
             <h1>Bilhete Unico (BU)</h1>
 
             <h2>Valores de Subsídio e arrecadação</h2>
-            <img data-src="imagens/BU/02_distribuicao_valores.png">
-            <img data-src="imagens/BU/02c_pct_subsidio.png">
+            <img data-src="BU/graficos/02_distribuicao_valores.png">
+            <img data-src="BU/graficos/02c_pct_subsidio.png">
 
             <hr>
             <h2>Transações por hora e dias da semana</h2>
-            <img data-src="imagens/BU/03_analise_temporal_hora.png">
-            <img data-src="imagens/BU/03b_transacoes_dia_semana.png">
-            <img data-src="imagens/BU/03c_serie_diaria.png">
-            <img data-src="imagens/BU/03d_latencia_processamento.png">
-            <img data-src="imagens/BU/03f_latencia_media_semana_modal.png">
-            <img data-src="imagens/BU/03g_latencia_media_semana_modal.png">
+            <img data-src="BU/graficos/03_analise_temporal_hora.png">
+            <img data-src="BU/graficos/03b_transacoes_dia_semana.png">
+            <img data-src="BU/graficos/03c_serie_diaria.png">
+            <img data-src="BU/graficos/03d_latencia_processamento.png">
+            <img data-src="BU/graficos/03f_latencia_media_semana_modal.png">
+            <img data-src="BU/graficos/03g_latencia_media_semana_modal.png">
 
             <hr>
             <h2>Operadoras</h2>
-            <img data-src="imagens/BU/04_ranking_entidades.png">
-            <img data-src="imagens/BU/04b_subsidio_por_operadora.png">
+            <img data-src="BU/graficos/04_ranking_entidades.png">
+            <img data-src="BU/graficos/04b_subsidio_por_operadora.png">
 
             <hr>
             <h2>Integrações</h2>
-            <img data-src="imagens/BU/05_sentido_integracoes.png">
-            <img data-src="imagens/BU/05b_subsidio_integracao.png">
+            <img data-src="BU/graficos/05_sentido_integracoes.png">
+            <img data-src="BU/graficos/05b_subsidio_integracao.png">
         </section>
 
         <section>
             <h1>Bilhetagem Eletrônica (BE)</h1>
 
             <h2>Valores de Subsídio e arrecadação</h2>
-            <img data-src="imagens/BE/02_distribuicao_valores.png">
-            <img data-src="imagens/BE/02c_pct_subsidio.png">
+            <img data-src="BE/graficos/02_distribuicao_valores.png">
+            <img data-src="BE/graficos/02c_pct_subsidio.png">
 
             <hr>
             <h2>Transações por hora e dias da semana</h2>
-            <img data-src="imagens/BE/03_analise_temporal_hora.png">
-            <img data-src="imagens/BE/03b_transacoes_dia_semana.png">
-            <img data-src="imagens/BE/03c_serie_diaria.png">
-            <img data-src="imagens/BE/03d_latencia_processamento.png">
-            <img data-src="imagens/BE/03f_latencia_media_semana_modal.png">
-            <img data-src="imagens/BE/03g_latencia_media_semana_modal.png">
+            <img data-src="BE/graficos/03_analise_temporal_hora.png">
+            <img data-src="BE/graficos/03b_transacoes_dia_semana.png">
+            <img data-src="BE/graficos/03c_serie_diaria.png">
+            <img data-src="BE/graficos/03d_latencia_processamento.png">
+            <img data-src="BE/graficos/03f_latencia_media_semana_modal.png">
+            <img data-src="BE/graficos/03g_latencia_media_semana_modal.png">
 
             <hr>
             <h2>Operadoras</h2>
-            <img data-src="imagens/BE/04_ranking_entidades.png">
-            <img data-src="imagens/BE/04b_subsidio_por_operadora.png">
+            <img data-src="BE/graficos/04_ranking_entidades.png">
+            <img data-src="BE/graficos/04b_subsidio_por_operadora.png">
         </section>
 
         <section>
@@ -156,18 +156,18 @@
 
             <hr>
             <h2>Transações por hora e dias da semana</h2>
-            <img data-src="imagens/GT/03a_transacoes_hora_semana.png">
-            <img data-src="imagens/GT/03b_transacoes_dia_semana.png">
-            <img data-src="imagens/GT/03c_serie_diaria.png">
-            <img data-src="imagens/GT/03d_latencia_processamento.png">
-            <img data-src="imagens/GT/03f_latencia_media_semana_modal.png">
-            <img data-src="imagens/GT/03g_latencia_media_semana_modal.png">
+            <img data-src="GT/graficos/03a_transacoes_hora_semana.png">
+            <img data-src="GT/graficos/03b_transacoes_dia_semana.png">
+            <img data-src="GT/graficos/03c_serie_diaria.png">
+            <img data-src="GT/graficos/03d_latencia_processamento.png">
+            <img data-src="GT/graficos/03f_latencia_media_semana_modal.png">
+            <img data-src="GT/graficos/03g_latencia_media_semana_modal.png">
 
             <hr>
             <h2>Operadoras</h2>
-            <img data-src="imagens/GT/04_ranking_entidades.png">
-            <img data-src="imagens/GT/04b_transacoes_por_aplicacao.png">
-            <img data-src="imagens/GT/04d_pie_aplicacao.png">
+            <img data-src="GT/graficos/04_ranking_entidades.png">
+            <img data-src="GT/graficos/04b_transacoes_por_aplicacao.png">
+            <img data-src="GT/graficos/04d_pie_aplicacao.png">
         </section>
     </div>
 
@@ -224,13 +224,17 @@
                     formatarDataParaBR(document.getElementById('data_inicial').value);
                 document.getElementById('span_data_final').textContent =
                     formatarDataParaBR(document.getElementById('data_final').value);
-
                 document.querySelectorAll('#resultado-container img').forEach(img => {
-                    const original = img.dataset.src;              // lê o data-src
+                    const original = img.dataset.src;       // "BU/graficos/03f_...png"
                     if (!original) return;
-                    const nomeDoArquivo = original.split('/').slice(-2).join('/');   // ex: "BU/02_distribuicao_valores.png"
-                    img.onerror = () => { img.style.display = 'none'; };            // esconde imagem que não existir
-                    img.src = `${data.caminho}${nomeDoArquivo}`;
+
+                    const url = `${data.caminho}${original}`;
+                    img.style.display = '';                 // reset from a previous run
+                    img.onerror = () => {
+                        console.error('Falhou:', url);
+                        img.style.display = 'none';
+                    };
+                    img.src = url;
                 });
             }
             else if (data.state === 'FAILURE') {
