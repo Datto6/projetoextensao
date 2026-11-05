@@ -7,7 +7,7 @@ import uuid
 from processamento import processar as executar_processamento
 
 app = Flask(__name__)
-
+ENTRADA_PADRAO="arquivos_default"
 # Configuração de conexão com o Redis
 app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
 app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
@@ -50,7 +50,7 @@ def processar():
     task = processamento_externo.delay(
         dados.get('data_inicial'),
         dados.get('data_final'),
-        dados.get('local_entrada'),
+        ENTRADA_PADRAO,
         pasta_saida
     )
 

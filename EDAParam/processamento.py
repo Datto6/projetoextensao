@@ -35,25 +35,39 @@ def processar(data_inicio:str, data_fim:str, input:str, output:str,sep:str):
         path=path_input/i #input/tipo
         current_date = start_date
         fez_download=False
+        antes = {f.name for f in path.glob("*")} if path.exists() else set()   # files already there
         while current_date <= end_date and current_date <=hoje:
             ano=current_date.year
             mes=current_date.month
             dia=current_date.day
             padrao=f"TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}" #padrao pra pegar os dados
+            # Já existe? (qualquer extensão, e não vazio)
+            ja_existe = path.exists() and any(
+                f.is_file() and f.stat().st_size > 0
+                for f in path.glob(f"{padrao}*")
+            )
+            if ja_existe:
+                print(f"{padrao} já existe, pulando download")
+                fez_download = True   # importante, veja abaixo
+                current_date += delta
+                continue
             try:
                 pegar_dados(padrao,path,i)
                 fez_download=True
             except SemRecursos:
-                fez_download=False
-                break
+                print(f"Arquivo TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02} não encontrado")
             except SemEspaco:
-                shutil.rmtree(path) #Sem espaço, apagar arquivos do tipo
-                print(f"Sem espaço a partir do dia TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}, apagando diretorio desse tipo ")
+                for f in path.glob("*"):
+                    if f.is_file() and f.name not in antes:
+                        f.unlink() #caso de erro, apagar arquivos do tipo
+                print(f"Sem espaço a partir do dia TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}, apagando novos arquivos dessa tentativa.")
                 fez_download=False
                 break
             except Exception:
-                shutil.rmtree(path) #caso de erro, apagar arquivos do tipo
-                print(f"Erro de leitura no dia TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02}, apagando diretorio desse tipo ")
+                for f in path.glob("*"):
+                    if f.is_file() and f.name not in antes:
+                        f.unlink() #caso de erro, apagar arquivos do tipo
+                print(f"Erro de leitura no dia TRANSACAO_{i}_PUBLICO_{ano}_{mes:02}_{dia:02},apagando novos arquivos dessa tentativa.")
                 fez_download=False
                 break
             current_date += delta
@@ -65,7 +79,11 @@ def processar(data_inicio:str, data_fim:str, input:str, output:str,sep:str):
             tipo=i
             if i=="GRATUIDADE":
                 tipo="GT"
-            mergerMes(path,output,tipo,sep)
+            novos = [f for f in path.glob("*") if f.is_file() and f.name not in antes]
+            if novos:
+                mergerMes(novos, path_input / "mensal", tipo, sep)
+            else:
+                print(f"Nenhum arquivo novo para {tipo}, pulando a junção")
     path_saida=Path(output)
 
     #chamadas de funcoes de gerar os graficos
@@ -74,11 +92,11 @@ def processar(data_inicio:str, data_fim:str, input:str, output:str,sep:str):
     data_ini = pd.Timestamp(data_ini)
     data_fim = pd.Timestamp(data_fim) + pd.Timedelta(days=1)
     if "BE" in downloaded:
-        EDA_BE(input=path_saida/"BE",output=path_saida/"BE"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
+        EDA_BE(input=path_input/"mensal"/"BE",output=path_saida/"BE"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
     if "BU" in downloaded:
-        EDA_BU(input=path_saida/"BU",output=path_saida/"BU"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
+        EDA_BU(input=path_input/"mensal"/"BU",output=path_saida/"BU"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
     if "GRATUIDADE" in downloaded:
-        EDA_GT(input=path_saida/"GT",output=path_saida/"GT"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
+        EDA_GT(input=path_input/"mensal"/"GT",output=path_saida/"GT"/"graficos",sep=",",data_ini=data_ini,data_fim=data_fim)
     end_time = time.perf_counter()
     execution_time = end_time - start_time
     print(f"Execution time: {execution_time:.6f} seconds(total do script todo)")

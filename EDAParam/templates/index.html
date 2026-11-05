@@ -76,10 +76,6 @@
                 <label>Data Final:</label><br>
                 <input type="date" id="data_final" required>
             </p>
-            <p>
-                <label>Local dos Arquivos de Entrada:</label><br>
-                <input type="text" id="local_entrada" placeholder="/caminho/para/dados" required style="width: 300px;">
-            </p>
             <button type="submit" class="btn">Iniciar Processamento</button>
         </form>
     </div>
@@ -186,8 +182,7 @@
 
         const dadosEnvio = {
             data_inicial: document.getElementById('data_inicial').value,
-            data_final: document.getElementById('data_final').value,
-            local_entrada: document.getElementById('local_entrada').value
+            data_final: document.getElementById('data_final').value
         };
 
         // PASSO 1: Manda a requisição inicial para enfileirar a tarefa

@@ -91,37 +91,35 @@ def load_data_spec(path: str, cols_use:dict, tipo:str,sep: str=";"):
         print(f"{path} eh um arquivo em branco.")
     return pd.DataFrame()
 
-def separar(input: Path, out: Path,tipo:str,sep:str):
+def separar(arquivos: list[Path], out: Path,tipo:str,sep:str):
     files_touched=[]
     empty_files=[]
     DERIVED = ["hora", "dia_semana", "data_dia",
                "pct_subsidio", "sentido_label", "tipo_aplicacao"]
     # Pegar ordem de saida de colunas no csv output combinado
     COLS_OUT = list(dict.fromkeys(list(pega_dict(tipo).values()) + DERIVED))
-    with os.scandir(input) as files:
-        for file in files:
-            dia = load_data_spec(file.path,pega_dict(tipo),tipo, sep)
-            if dia.empty:
-                empty_files.append(str(file.path))
-                continue #se o dia nao tiver nenhum valor, pulamos essa iteracao
-            dia = dia.reindex(columns=COLS_OUT)   # fixar ordem
-            for month, group in dia.groupby(dia["data_transacao"].dt.month): #agrupa pela coluna de transacao
-                key = f"mes_{month}_{tipo}.csv"
-                arquivo=Path(out / key)
-                if arquivo.is_file():
-                    group.to_csv(arquivo,mode="a",header=False, index=False) #modo append, sem o header
-                else:
-                    group.to_csv(arquivo,mode="w",header=True, index=False) #cria novo arquivo do mes
-                files_touched.append(str(file.path))
+    for file in sorted(arquivos):
+        dia = load_data_spec(str(file),pega_dict(tipo),tipo, sep)
+        if dia.empty:
+            empty_files.append(str(file))
+            continue #se o dia nao tiver nenhum valor, pulamos essa iteracao
+        dia = dia.reindex(columns=COLS_OUT)   # fixar ordem
+        for month, group in dia.groupby(dia["data_transacao"].dt.month): #agrupa pela coluna de transacao
+            key = f"mes_{month}_{tipo}.csv"
+            arquivo=Path(out / key)
+            if arquivo.is_file():
+                group.to_csv(arquivo,mode="a",header=False, index=False) #modo append, sem o header
+            else:
+                group.to_csv(arquivo,mode="w",header=True, index=False) #cria novo arquivo do mes
+            files_touched.append(str(file))
     print(f"Arquivos adicionados:{files_touched}")
     print(f"Arquivos vazios:{empty_files}")
 
-def mergerMes(input,output,tipo,sep):
+def mergerMes(arquivos,output,tipo,sep):
     start_time = time.perf_counter()
-    input=Path(input)
     out = Path(output)/tipo
     out.mkdir(parents=True, exist_ok=True)
-    separar(input,out,tipo,sep)
+    separar(arquivos,out,tipo,sep)
     print(f"\n{'═'*60}")
     print(f"  Junção concluida, salvo em: {out.resolve()}")
     print(f"{'═'*60}\n")
